@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+import redis.asyncio as redis
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -32,9 +33,21 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         components["postgis"] = "unavailable (standard postgres fallback)"
 
-    # 3. ML Engine client
-    ml_res = await ml_client.health_check()
-    components["ml_engine"] = ml_res.status
+    # 3. Redis check
+    try:
+        r = redis.from_url(settings.REDIS_URL)
+        await r.ping()
+        components["redis"] = "healthy"
+        await r.aclose()
+    except Exception as e:
+        components["redis"] = f"unhealthy: {str(e)}"
+
+    # 4. ML Engine client
+    try:
+        ml_res = await ml_client.health_check()
+        components["ml_engine"] = ml_res.status
+    except Exception as e:
+        components["ml_engine"] = "unavailable"
 
     overall = "healthy" if components.get("database") == "healthy" else "degraded"
 

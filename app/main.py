@@ -23,6 +23,7 @@ from app.api.v1 import (
     ulpin,
     units,
     validation,
+    evidence,
 )
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
@@ -78,6 +79,8 @@ async def request_middleware(request: Request, call_next):
     response.headers["X-Process-Time"] = f"{duration_ms}ms"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
@@ -102,7 +105,7 @@ async def app_error_handler(request: Request, exc: AppError):
 async def validation_error_handler(request: Request, exc: RequestValidationError):
     errors = exc.errors()
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, # kept if starlette < 0.36 or upgrade to HTTP_422_UNPROCESSABLE_CONTENT? Actually, let's use status.HTTP_422_UNPROCESSABLE_ENTITY from fastapi status because it's compatible or just 422
         content=ApiResponse(
             success=False,
             data=None,
@@ -167,3 +170,4 @@ app.include_router(search.router, prefix=api_v1)
 app.include_router(validation.router, prefix=api_v1)
 app.include_router(datasets.router, prefix=api_v1)
 app.include_router(jobs.router, prefix=api_v1)
+app.include_router(evidence.router, prefix=api_v1)

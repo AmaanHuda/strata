@@ -3,7 +3,8 @@ from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+import json
 
 from app.api.v1.deps import get_current_user, require_roles
 from app.core.errors import NotFoundError
@@ -12,7 +13,7 @@ from app.db.models.user import User, UserRole
 from app.db.repositories.parcel import ParcelRepository
 from app.db.session import get_db
 from app.schemas.common import ApiResponse
-from app.schemas.property import BuildingOut, ParcelCreate, ParcelOut
+from app.schemas.property import BuildingOut, ParcelCreate, ParcelOut, ParcelUpdate
 from app.services.parcel import ParcelService
 
 router = APIRouter(prefix="/parcels", tags=["parcels"])
@@ -67,3 +68,56 @@ async def get_parcel_buildings(
     )
     buildings = res.scalars().all()
     return ApiResponse(data=[BuildingOut.model_validate(b) for b in buildings], meta={"count": len(buildings)})
+
+@router.put("/{parcel_id}", response_model=ApiResponse[ParcelOut])
+async def update_parcel(
+    parcel_id: UUID,
+    data: ParcelUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_roles(UserRole.ADMIN, UserRole.SURVEYOR)),
+):
+    svc = ParcelService(db)
+    parcel = await svc.get_parcel(parcel_id)
+    if not parcel or not parcel.is_active:
+        raise NotFoundError(f"Parcel {parcel_id} not found or inactive")
+    
+    new_parcel = parcel.create_new_version()
+    update_data = data.model_dump(exclude_unset=True)
+    for k, v in update_data.items():
+        setattr(new_parcel, k, v)
+    
+    db.add(new_parcel)
+    await db.commit()
+    await db.refresh(new_parcel)
+    return ApiResponse(data=ParcelOut.model_validate(new_parcel), meta={"message": "Parcel version updated"})
+
+@router.get("/{parcel_id}/history", response_model=ApiResponse[List[ParcelOut]])
+async def get_parcel_history(
+    parcel_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    parcel = await db.get(Parcel, parcel_id)
+    if not parcel:
+        raise NotFoundError("Parcel not found")
+    
+    res = await db.execute(
+        select(Parcel).where(Parcel.parcel_number == parcel.parcel_number).order_by(Parcel.version.desc())
+    )
+    versions = res.scalars().all()
+    return ApiResponse(data=[ParcelOut.model_validate(v) for v in versions])
+
+@router.get("/{parcel_id}/geojson")
+async def get_parcel_geojson(
+    parcel_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    res = await db.execute(
+        select(func.ST_AsGeoJSON(Parcel.geometry_2d)).where(Parcel.id == parcel_id, Parcel.is_active == True)
+    )
+    geojson_str = res.scalar()
+    if not geojson_str:
+        raise NotFoundError("Geometry not found or parcel inactive")
+    return ApiResponse(data=json.loads(geojson_str))
+

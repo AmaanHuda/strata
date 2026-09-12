@@ -1,4 +1,4 @@
-﻿"""Dataset registry â€“ metadata for all ingested spatial datasets."""
+"""Dataset registry â€“ metadata for all ingested spatial datasets."""
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, String, Text, text
@@ -14,7 +14,10 @@ class DatasetRegistry(Base):
     name = Column(String(255), nullable=False, unique=True, index=True)
     version = Column(String(50), nullable=False, default="1.0.0")
     source = Column(String(500), nullable=True)
+    authority = Column(String(255), nullable=True)
     license = Column(String(255), nullable=True)
+    acquisition_date = Column(DateTime(timezone=True), nullable=True)
+    validation_status = Column(String(50), nullable=True)
     modality = Column(String(100), nullable=True)  # satellite, lidar, survey, etc.
     crs = Column(String(50), nullable=True)
     resolution_m = Column(String(50), nullable=True)

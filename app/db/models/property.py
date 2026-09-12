@@ -27,6 +27,8 @@ class ScientificStatus:
     DATA_LIMITED = "DATA_LIMITED"
     CONFLICTING = "CONFLICTING"
     AUTHORITATIVE = "AUTHORITATIVE"
+    SUPPORTED = "SUPPORTED"
+    MISSING = "MISSING"
 
 
 class Parcel(Base):
@@ -79,6 +81,41 @@ class Parcel(Base):
     # Relationships
     buildings = relationship("Building", back_populates="parcel", cascade="all, delete-orphan")
     ulpin_records = relationship("ULPINRecord", back_populates="parcel")
+
+    def expire(self):
+        """Expire the current version."""
+        self.valid_to = datetime.now(timezone.utc)
+        self.is_active = False
+
+    def create_new_version(self):
+        """Create a new version based on this one."""
+        self.expire()
+        new_parcel = Parcel(
+            parcel_number=self.parcel_number,
+            survey_number=self.survey_number,
+            district=self.district,
+            taluk=self.taluk,
+            village=self.village,
+            state=self.state,
+            land_use=self.land_use,
+            official_ulpin=self.official_ulpin,
+            candidate_ulpin=self.candidate_ulpin,
+            status=self.status,
+            geometry_2d=self.geometry_2d,
+            boundary_wkt=self.boundary_wkt,
+            source_crs=self.source_crs,
+            processing_crs=self.processing_crs,
+            elevation_min_m=self.elevation_min_m,
+            elevation_max_m=self.elevation_max_m,
+            area_sqm=self.area_sqm,
+            is_verified=self.is_verified,
+            confidence_score=self.confidence_score,
+            metadata_=self.metadata_,
+            version=self.version + 1,
+            valid_from=datetime.now(timezone.utc),
+            is_active=True
+        )
+        return new_parcel
 
     __table_args__ = (
         Index("idx_parcels_geom", "geometry_2d", postgresql_using="gist"),
@@ -142,6 +179,46 @@ class Building(Base):
     parcel = relationship("Parcel", back_populates="buildings")
     floors = relationship("Floor", back_populates="building", cascade="all, delete-orphan", order_by="Floor.floor_number")
 
+    def expire(self):
+        """Expire the current version."""
+        self.valid_to = datetime.now(timezone.utc)
+        self.is_active = False
+
+    def create_new_version(self):
+        """Create a new version based on this one."""
+        self.expire()
+        new_bld = Building(
+            parcel_id=self.parcel_id,
+            building_name=self.building_name,
+            building_type=self.building_type,
+            floor_count=self.floor_count,
+            floor_count_above_ground=self.floor_count_above_ground,
+            floor_count_below_ground=self.floor_count_below_ground,
+            height_m=self.height_m,
+            height_confidence=self.height_confidence,
+            uncertainty_range_m=self.uncertainty_range_m,
+            footprint_2d=self.footprint_2d,
+            footprint_wkt=self.footprint_wkt,
+            geometry_3d_lod2=self.geometry_3d_lod2,
+            footprint_area_sqm=self.footprint_area_sqm,
+            volume_cum=self.volume_cum,
+            source_crs=self.source_crs,
+            processing_crs=self.processing_crs,
+            official_ulpin=self.official_ulpin,
+            candidate_ulpin=self.candidate_ulpin,
+            status=self.status,
+            ml_derived=self.ml_derived,
+            ml_model_version=self.ml_model_version,
+            ml_confidence_score=self.ml_confidence_score,
+            is_verified=self.is_verified,
+            construction_year=self.construction_year,
+            metadata_=self.metadata_,
+            version=self.version + 1,
+            valid_from=datetime.now(timezone.utc),
+            is_active=True
+        )
+        return new_bld
+
     __table_args__ = (
         Index("idx_buildings_footprint", "footprint_2d", postgresql_using="gist"),
         CheckConstraint("floor_count IS NULL OR floor_count >= 0", name="chk_positive_floor_count"),
@@ -197,6 +274,37 @@ class Floor(Base):
     units = relationship("Unit", back_populates="floor", cascade="all, delete-orphan", order_by="Unit.unit_number")
     ulpin_records = relationship("ULPINRecord", back_populates="floor")
 
+    def expire(self):
+        """Expire the current version."""
+        self.valid_to = datetime.now(timezone.utc)
+        self.is_active = False
+
+    def create_new_version(self):
+        """Create a new version based on this one."""
+        self.expire()
+        new_floor = Floor(
+            building_id=self.building_id,
+            floor_number=self.floor_number,
+            floor_label=self.floor_label,
+            floor_use=self.floor_use,
+            height_above_ground_m=self.height_above_ground_m,
+            ceiling_height_m=self.ceiling_height_m,
+            floor_area_sqm=self.floor_area_sqm,
+            volume_cum=self.volume_cum,
+            geometry_3d=self.geometry_3d,
+            official_ulpin=self.official_ulpin,
+            candidate_ulpin=self.candidate_ulpin,
+            status=self.status,
+            ml_derived=self.ml_derived,
+            ml_confidence_score=self.ml_confidence_score,
+            is_verified=self.is_verified,
+            metadata_=self.metadata_,
+            version=self.version + 1,
+            valid_from=datetime.now(timezone.utc),
+            is_active=True
+        )
+        return new_floor
+
     __table_args__ = (
         Index("idx_floors_bld_num", "building_id", "floor_number", unique=True),
     )
@@ -244,6 +352,35 @@ class Unit(Base):
     # Relationships
     floor = relationship("Floor", back_populates="units")
     ulpin_records = relationship("ULPINRecord", back_populates="unit")
+
+    def expire(self):
+        """Expire the current version."""
+        self.valid_to = datetime.now(timezone.utc)
+        self.is_active = False
+
+    def create_new_version(self):
+        """Create a new version based on this one."""
+        self.expire()
+        new_unit = Unit(
+            floor_id=self.floor_id,
+            unit_number=self.unit_number,
+            unit_type=self.unit_type,
+            area_sqm=self.area_sqm,
+            volume_cum=self.volume_cum,
+            is_occupied=self.is_occupied,
+            geometry_3d=self.geometry_3d,
+            official_ulpin=self.official_ulpin,
+            candidate_ulpin=self.candidate_ulpin,
+            status=self.status,
+            ml_derived=self.ml_derived,
+            ml_confidence_score=self.ml_confidence_score,
+            is_verified=self.is_verified,
+            metadata_=self.metadata_,
+            version=self.version + 1,
+            valid_from=datetime.now(timezone.utc),
+            is_active=True
+        )
+        return new_unit
 
     __table_args__ = (
         Index("idx_units_flr_num", "floor_id", "unit_number", unique=True),

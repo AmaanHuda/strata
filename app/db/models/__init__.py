@@ -6,6 +6,7 @@ from app.db.models.property import Building, Floor, Parcel, ScientificStatus, Un
 from app.db.models.provenance import ProvenanceRecord
 from app.db.models.ulpin import ULPINRecord, ULPINStatus
 from app.db.models.user import RefreshToken, User, UserRole
+from app.db.models.evidence import EvidenceDecisionRecord, LegalValidationRecord
 
 __all__ = [
     "AuditLog",
@@ -23,4 +24,6 @@ __all__ = [
     "User",
     "UserRole",
     "RefreshToken",
+    "EvidenceDecisionRecord",
+    "LegalValidationRecord",
 ]

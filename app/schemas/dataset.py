@@ -27,7 +27,10 @@ class DatasetOut(BaseModel):
     name: str
     version: str
     source: Optional[str] = None
+    authority: Optional[str] = None
     license: Optional[str] = None
+    acquisition_date: Optional[datetime] = None
+    validation_status: Optional[str] = None
     modality: Optional[str] = None
     crs: Optional[str] = None
     resolution_m: Optional[str] = None
