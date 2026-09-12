@@ -1,24 +1,24 @@
-﻿"""Unit tests for ULPIN generation logic."""
-import uuid
-from app.services.ulpin import _compute_ulpin
+"""Unit tests for ULPIN generator."""
+from app.services.ulpin import ULPINService
 
 
-def test_ulpin_format():
-    uid = uuid.uuid4()
-    ulpin = _compute_ulpin("parcel", uid, "Mumbai", "Andheri", "Versova")
-    assert len(ulpin) > 10
-    assert ulpin[:2] == "IN"
+def test_parcel_ulpin_generation():
+    ulpin = ULPINService.generate_parcel_ulpin(
+        state="DL",
+        district="01",
+        taluk="002",
+        village="000456",
+        survey_number="101/A",
+    )
+    assert ulpin.startswith("DL-01-002-000456-P-")
+    assert len(ulpin) > 20
 
 
-def test_ulpin_deterministic():
-    uid = uuid.uuid4()
-    u1 = _compute_ulpin("building", uid)
-    u2 = _compute_ulpin("building", uid)
-    assert u1 == u2
-
-
-def test_ulpin_different_entities():
-    uid = uuid.uuid4()
-    p = _compute_ulpin("parcel", uid)
-    b = _compute_ulpin("building", uid)
-    assert p != b
+def test_vertical_unit_ulpin_generation():
+    parent = "DL-01-002-000456-P-123456"
+    unit_ulpin = ULPINService.generate_vertical_unit_ulpin(
+        parent_ulpin=parent,
+        floor_number=3,
+        unit_number="302",
+    )
+    assert unit_ulpin == f"{parent}-F3-U302"

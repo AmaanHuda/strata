@@ -1,25 +1,65 @@
-﻿"""Health check endpoint."""
-from fastapi import APIRouter, Depends
-from sqlalchemy import text
+"""Health check endpoints (Liveness, Readiness, Detailed)."""
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.schemas.common import HealthResponse
+from app.integrations.ml_engine.client import ml_client
+from app.schemas.common import ApiResponse, HealthResponse
 
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthResponse)
-async def health(db: AsyncSession = Depends(get_db)):
-    db_status = "ok"
+@router.get("/health", response_model=ApiResponse[HealthResponse])
+@router.get("/api/v1/health", response_model=ApiResponse[HealthResponse])
+async def health_check(db: AsyncSession = Depends(get_db)):
+    """Comprehensive readiness and component status."""
+    components = {}
+    
+    # 1. Database check
     try:
-        await db.execute(text("SELECT 1"))
-    except Exception:
-        db_status = "error"
-    return HealthResponse(
-        status="ok" if db_status == "ok" else "degraded",
-        version=settings.APP_VERSION,
-        database=db_status,
-        environment=settings.APP_ENV,
+        await db.execute(text("SELECT 1;"))
+        components["database"] = "healthy"
+    except Exception as e:
+        components["database"] = f"unhealthy: {str(e)}"
+
+    # 2. PostGIS check
+    try:
+        res = await db.execute(text("SELECT PostGIS_Version();"))
+        ver = res.scalar()
+        components["postgis"] = f"available: {ver}"
+    except Exception as e:
+        components["postgis"] = "unavailable (standard postgres fallback)"
+
+    # 3. ML Engine client
+    ml_res = await ml_client.health_check()
+    components["ml_engine"] = ml_res.status
+
+    overall = "healthy" if components.get("database") == "healthy" else "degraded"
+
+    return ApiResponse(
+        data=HealthResponse(
+            status=overall,
+            version="2.0.0",
+            database="PostgreSQL + PostGIS",
+            environment=settings.ENVIRONMENT,
+            components=components,
+        )
     )
+
+
+@router.get("/health/live")
+async def liveness_probe():
+    """Kubernetes / Docker Liveness probe."""
+    return {"status": "alive"}
+
+
+@router.get("/health/ready")
+async def readiness_probe(db: AsyncSession = Depends(get_db)):
+    """Kubernetes / Docker Readiness probe."""
+    try:
+        await db.execute(text("SELECT 1;"))
+        return {"status": "ready"}
+    except Exception as e:
+        return {"status": "not_ready", "error": str(e)}

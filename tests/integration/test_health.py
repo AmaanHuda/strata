@@ -1,11 +1,13 @@
-﻿"""Integration test: health endpoint."""
+"""Integration tests for Health check endpoints."""
 import pytest
+from httpx import AsyncClient, ASGITransport
+from app.main import app
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint(client):
-    resp = await client.get("/health")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] in ("ok", "degraded")
-    assert "version" in data
+async def test_liveness():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/health/live")
+        assert res.status_code == 200
+        assert res.json() == {"status": "alive"}

@@ -1,71 +1,220 @@
 """
 ML Engine API contract schemas.
-These define the interface between the backend and the 3D-Mapping-ml-engine.
-Any schema changes must be coordinated with both repos.
+Defines interfaces for all 9 ML operations + Result Ingestion.
+Any schema changes must be coordinated with 3D-Mapping-ml-engine repo.
 """
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+SUPPORTED_SCHEMA_VERSIONS = ["1.0.0", "1.1.0", "2.0.0"]
 
 
+class MLHealthResponse(BaseModel):
+    status: str = "ok"
+    version: str = "2.0.0"
+    device: str = "cpu"
+    models_loaded: List[str] = Field(default_factory=list)
+
+
+# 1. Building Extraction
+class BuildingExtractionRequest(BaseModel):
+    bbox: List[float] = Field(..., description="[min_lon, min_lat, max_lon, max_lat]")
+    image_source: Optional[str] = "satellite"
+    confidence_threshold: float = 0.5
+    model_version: Optional[str] = "latest"
+
+
+class ExtractedBuildingItem(BaseModel):
+    polygon_wkt: str
+    confidence: float
+    bbox: List[float]
+    area_sqm: Optional[float] = None
+
+
+class BuildingExtractionResponse(BaseModel):
+    status: str
+    buildings_found: int
+    buildings: List[ExtractedBuildingItem]
+    model_version: str
+
+
+# 2. Height Estimation
 class HeightEstimationRequest(BaseModel):
-    """Request to estimate building height from satellite/lidar data."""
     parcel_id: str
     building_id: str
     lat: float
     lon: float
+    footprint_wkt: Optional[str] = None
     imagery_source: Optional[str] = "satellite"
     model_version: Optional[str] = "latest"
 
 
 class HeightEstimationResponse(BaseModel):
-    building_id: str
+    status: str
     estimated_height_m: float
-    confidence_score: float  # 0.0 â€“ 1.0
-    confidence_label: str    # HIGH | MEDIUM | LOW | INSUFFICIENT
-    floor_count_estimate: Optional[int] = None
-    model_version: str
-    inference_time_ms: float
+    confidence_score: float
     uncertainty_range_m: Optional[float] = None
-    legal_disclaimer: str = (
-        "AI-derived height estimates are analytical/candidate outputs "
-        "and do not constitute authoritative cadastral records."
-    )
-
-
-class BuildingExtractionRequest(BaseModel):
-    parcel_id: str
-    bbox: List[float]  # [min_lon, min_lat, max_lon, max_lat]
-    imagery_source: Optional[str] = "satellite"
-    model_version: Optional[str] = "latest"
-
-
-class BuildingExtractionResponse(BaseModel):
-    parcel_id: str
-    buildings: List[Dict[str, Any]]  # list of {footprint_wkt, confidence, area_sqm}
+    floor_count_estimate: Optional[int] = None
+    method: str
     model_version: str
-    processing_time_ms: float
-    legal_disclaimer: str = (
-        "ML-extracted building footprints are candidate outputs requiring survey validation."
-    )
 
 
+# 3. Floor Detection / Estimation
 class FloorCountRequest(BaseModel):
     building_id: str
-    height_m: Optional[float] = None
-    imagery_source: Optional[str] = "satellite"
+    height_m: float
+    building_type: Optional[str] = "residential"
+    facade_image_url: Optional[str] = None
 
 
 class FloorCountResponse(BaseModel):
-    building_id: str
+    status: str
     floor_count: int
     floor_count_above_ground: int
     floor_count_below_ground: int
-    confidence_score: float
-    model_version: str
+    estimated_ceiling_height_m: float
+    confidence: float
+    method: str
 
 
-class MLHealthResponse(BaseModel):
+# 4. Change Detection
+class ChangeDetectionRequest(BaseModel):
+    parcel_id: str
+    t1_image_url: Optional[str] = None
+    t2_image_url: Optional[str] = None
+    footprint_wkt: Optional[str] = None
+
+
+class ChangeDetectionResponse(BaseModel):
+    has_changed: bool
+    change_type: str
+    confidence: float
+    change_area_sqm: Optional[float] = None
+
+
+# 5. 3D Reconstruction
+class Reconstruction3DRequest(BaseModel):
+    building_id: str
+    footprint_wkt: str
+    height_m: float
+    floor_count: int
+    roof_type: Optional[str] = "flat"
+
+
+class Reconstruction3DResponse(BaseModel):
     status: str
-    version: str
-    models_loaded: List[str]
-    gpu_available: bool
+    lod: str = "LoD2"
+    mesh_format: str = "gltf"
+    volume_cum: float
+    polyhedral_wkt: Optional[str] = None
+    confidence: float
+
+
+# 6. Vertical Unit Partitioning
+class VerticalUnitGenRequest(BaseModel):
+    building_id: str
+    floor_number: int
+    floor_area_sqm: float
+    building_type: str = "residential"
+    target_units_per_floor: Optional[int] = None
+
+
+class GeneratedUnit(BaseModel):
+    unit_number: str
+    unit_type: str
+    area_sqm: float
+    volume_cum: Optional[float] = None
+    confidence: float
+
+
+class VerticalUnitGenResponse(BaseModel):
+    status: str
+    floor_number: int
+    units: List[GeneratedUnit]
+
+
+# 7. Evidence Fusion
+class EvidenceFusionRequest(BaseModel):
+    parcel_id: str
+    optical_height_m: Optional[float] = None
+    shadow_height_m: Optional[float] = None
+    lidar_height_m: Optional[float] = None
+    street_view_floors: Optional[int] = None
+
+
+class EvidenceFusionResponse(BaseModel):
+    fused_height_m: float
+    fused_floors: int
+    confidence: float
+    evidence_sources: List[str]
+
+
+# 8. Confidence Calculation
+class ConfidenceCalcRequest(BaseModel):
+    evidence_scores: Dict[str, float]
+
+
+class ConfidenceCalcResponse(BaseModel):
+    overall_confidence: float
+    rating: str
+
+
+# 9. Output Validation
+class OutputValidationRequest(BaseModel):
+    footprint_wkt: str
+    height_m: float
+    floors: int
+
+
+class OutputValidationResponse(BaseModel):
+    is_valid: bool
+    violations: List[str] = Field(default_factory=list)
+
+
+# Master ML Ingestion Schema
+class MLUnitIngest(BaseModel):
+    unit_number: str
+    unit_type: Optional[str] = "residential"
+    area_sqm: Optional[float] = None
+    volume_cum: Optional[float] = None
+    confidence: Optional[float] = 0.8
+
+
+class MLFloorIngest(BaseModel):
+    floor_number: int
+    floor_label: Optional[str] = None
+    floor_use: Optional[str] = None
+    height_above_ground_m: Optional[float] = None
+    ceiling_height_m: Optional[float] = 3.0
+    floor_area_sqm: Optional[float] = None
+    units: List[MLUnitIngest] = Field(default_factory=list)
+
+
+class MLBuildingIngest(BaseModel):
+    building_name: Optional[str] = None
+    building_type: Optional[str] = "residential"
+    footprint_wkt: str
+    height_m: float
+    height_confidence: Optional[float] = 0.85
+    uncertainty_range_m: Optional[float] = 1.0
+    floor_count: int
+    floors: List[MLFloorIngest] = Field(default_factory=list)
+
+
+class MLIngestionPayload(BaseModel):
+    schema_version: str = "2.0.0"
+    job_id: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    parcel_number: str
+    district: str
+    state: str = "DL"
+    taluk: Optional[str] = None
+    village: Optional[str] = None
+    source_crs: str = "EPSG:4326"
+    processing_crs: str = "EPSG:3857"
+    model_name: str = "3D-Mapping-ML-Engine"
+    model_version: str = "v2.0"
+    dataset_name: Optional[str] = "Delhi-Urban-Cadastral-2026"
+    dataset_version: Optional[str] = "1.0.0"
+    scientific_status: str = "CANDIDATE"
+    buildings: List[MLBuildingIngest] = Field(default_factory=list)

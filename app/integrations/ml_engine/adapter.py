@@ -1,10 +1,8 @@
-﻿"""
-ML Adapter â€” service layer that wraps the ML client,
-handles contract mapping, error handling, and result storage.
 """
+ML Adapter: bridge between FastAPI backend routes and external ML Engine.
+"""
+from typing import Any, Dict, Optional
 from uuid import UUID
-
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import logger
@@ -12,67 +10,52 @@ from app.db.models.property import Building
 from app.db.repositories.base import BaseRepository
 from app.integrations.ml_engine.client import ml_client
 from app.integrations.ml_engine.contracts import (
-    FloorCountRequest, HeightEstimationRequest, BuildingExtractionRequest
+    HeightEstimationRequest, HeightEstimationResponse,
+    FloorCountRequest, FloorCountResponse,
+    VerticalUnitGenRequest, VerticalUnitGenResponse,
 )
 
 
 class MLAdapter:
-    """Bridge between backend services and the ML engine."""
+    """High-level ML orchestration bridge for property entities."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.building_repo = BaseRepository(Building, db)
 
-    async def run_height_estimation(self, building_id: UUID, lat: float, lon: float) -> dict:
-        """Call ML engine for height estimation and update building record."""
-        logger.info("ml_height_estimation_start", building_id=str(building_id))
-        try:
-            req = HeightEstimationRequest(
-                parcel_id="unknown",
-                building_id=str(building_id),
-                lat=lat, lon=lon,
-            )
-            resp = await ml_client.estimate_height(req)
-        except Exception as exc:
-            logger.error("ml_height_estimation_failed", error=str(exc))
-            raise HTTPException(status_code=503, detail=f"ML engine unavailable: {exc}")
+    async def trigger_height_estimation(self, building_id: UUID, lat: float, lon: float) -> HeightEstimationResponse:
+        """Requests height estimation for building."""
+        building = await self.building_repo.get(building_id)
+        if not building:
+            raise ValueError(f"Building {building_id} not found")
 
-        # Update building in DB
-        repo = BaseRepository(Building, self.db)
-        building = await repo.get(building_id)
-        if building:
-            await repo.update(building, {
-                "height_m": resp.estimated_height_m,
-                "height_confidence": resp.confidence_score,
-                "ml_derived": True,
-                "ml_model_version": resp.model_version,
-                "ml_confidence_score": resp.confidence_score,
-            })
-        logger.info("ml_height_estimation_done", building_id=str(building_id), height_m=resp.estimated_height_m)
-        return resp.model_dump()
+        req = HeightEstimationRequest(
+            parcel_id=str(building.parcel_id),
+            building_id=str(building_id),
+            lat=lat,
+            lon=lon,
+            footprint_wkt=building.footprint_wkt,
+        )
+        res = await ml_client.estimate_height(req)
 
-    async def run_building_extraction(self, parcel_id: UUID, bbox: list) -> dict:
-        logger.info("ml_building_extraction_start", parcel_id=str(parcel_id))
-        try:
-            req = BuildingExtractionRequest(parcel_id=str(parcel_id), bbox=bbox)
-            resp = await ml_client.extract_buildings(req)
-        except Exception as exc:
-            logger.error("ml_building_extraction_failed", error=str(exc))
-            raise HTTPException(status_code=503, detail=f"ML engine unavailable: {exc}")
-        return resp.model_dump()
+        await self.building_repo.update(building, {
+            "height_m": res.estimated_height_m,
+            "height_confidence": res.confidence_score,
+            "uncertainty_range_m": res.uncertainty_range_m,
+            "floor_count": res.floor_count_estimate or building.floor_count,
+            "ml_derived": True,
+            "ml_model_version": res.model_version,
+            "ml_confidence_score": res.confidence_score,
+        })
+        return res
 
-    async def run_floor_count(self, building_id: UUID, height_m: float = None) -> dict:
-        logger.info("ml_floor_count_start", building_id=str(building_id))
-        try:
-            req = FloorCountRequest(building_id=str(building_id), height_m=height_m)
-            resp = await ml_client.estimate_floor_count(req)
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"ML engine unavailable: {exc}")
-        repo = BaseRepository(Building, self.db)
-        building = await repo.get(building_id)
-        if building:
-            await repo.update(building, {
-                "floor_count": resp.floor_count,
-                "floor_count_above_ground": resp.floor_count_above_ground,
-                "floor_count_below_ground": resp.floor_count_below_ground,
-            })
-        return resp.model_dump()
+    async def generate_vertical_units_for_floor(
+        self, floor_id: UUID, floor_number: int, floor_area_sqm: float
+    ) -> VerticalUnitGenResponse:
+        """Invokes vertical unit generation algorithm."""
+        req = VerticalUnitGenRequest(
+            building_id=str(floor_id),
+            floor_number=floor_number,
+            floor_area_sqm=floor_area_sqm,
+        )
+        return await ml_client.generate_vertical_units(req)

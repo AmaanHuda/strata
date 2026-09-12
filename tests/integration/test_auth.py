@@ -1,11 +1,16 @@
-﻿"""Integration tests: auth register/login flow."""
+"""Integration tests for Authentication endpoints."""
 import pytest
-from unittest.mock import AsyncMock, patch
+from httpx import AsyncClient, ASGITransport
+from app.main import app
 
 
 @pytest.mark.asyncio
-async def test_root_endpoint(client):
-    resp = await client.get("/")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "SIH 2026" in data["project"]
+async def test_auth_validation_error():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Invalid body (missing password)
+        res = await client.post("/api/v1/auth/login", json={"username": "test"})
+        assert res.status_code == 422
+        body = res.json()
+        assert body["success"] is False
+        assert body["error"]["code"] == "VALIDATION_ERROR"

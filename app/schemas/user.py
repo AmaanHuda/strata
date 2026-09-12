@@ -1,4 +1,4 @@
-﻿"""User schemas."""
+"""User and Authentication schemas."""
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -27,20 +27,29 @@ class UserOut(BaseModel):
     id: UUID
     email: str
     username: str
-    full_name: Optional[str]
+    full_name: Optional[str] = None
     role: UserRole
     is_active: bool
     is_verified: bool
     created_at: datetime
-    last_login_at: Optional[datetime]
+    last_login_at: Optional[datetime] = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    expires_in: int = 1800
 
 
-class LoginRequest(BaseModel):
-    username: str   # email or username
-    password: str
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: Optional[str] = None
