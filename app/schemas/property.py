@@ -215,3 +215,77 @@ class PropertyHistoryOut(BaseModel):
     is_active: bool = True
     status: str = "CANDIDATE"
     change_summary: Optional[str] = None
+
+
+class CentroidPoint(BaseModel):
+    lat: float
+    lon: float
+
+
+class UnitStructureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    id: UUID
+    floor_id: UUID
+    unit_number: str
+    unit_type: Optional[str] = None
+    area_sqm: Optional[Decimal] = None
+    volume_cum: Optional[Decimal] = None
+    is_occupied: Optional[bool] = None
+    official_ulpin: Optional[str] = None
+    candidate_ulpin: Optional[str] = None
+    status: str = "CANDIDATE"
+    is_verified: bool = False
+
+
+class FloorStructureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    id: UUID
+    building_id: UUID
+    floor_number: int
+    floor_label: Optional[str] = None
+    floor_use: Optional[str] = None
+    height_above_ground_m: Optional[float] = None
+    ceiling_height_m: Optional[float] = None
+    floor_area_sqm: Optional[Decimal] = None
+    volume_cum: Optional[Decimal] = None
+    official_ulpin: Optional[str] = None
+    candidate_ulpin: Optional[str] = None
+    status: str = "CANDIDATE"
+    is_verified: bool = False
+    units: List[UnitStructureOut] = Field(default_factory=list)
+
+
+class BuildingStructureOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    id: UUID
+    building_id: UUID
+    parcel_id: UUID
+    building_name: Optional[str] = None
+    building_type: Optional[str] = None
+    floor_count: Optional[int] = None
+    height_m: Optional[float] = None
+    footprint_area_sqm: Optional[Decimal] = None
+    official_ulpin: Optional[str] = None
+    candidate_ulpin: Optional[str] = None
+    status: str = "CANDIDATE"
+    is_verified: bool = False
+    centroid: Optional[CentroidPoint] = None
+    address: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    provenance: Optional[Dict[str, Any]] = None
+    floors: List[FloorStructureOut] = Field(default_factory=list)
+
+
+class BuildingGeometryOut(BaseModel):
+    building_id: UUID
+    parcel_id: UUID
+    centroid: Optional[CentroidPoint] = None
+    height_m: Optional[float] = None
+    elevation_m: Optional[float] = None
+    footprint_wkt: Optional[str] = None
+    footprint_geojson: Optional[Dict[str, Any]] = None
+    bounds: Optional[List[float]] = None
+    geometry_3d_lod2: Optional[Dict[str, Any]] = None
+    source_crs: str = "EPSG:4326"
+    processing_crs: str = "EPSG:3857"

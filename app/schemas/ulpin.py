@@ -39,3 +39,21 @@ class ULPINLookupResponse(BaseModel):
     entity_id: Optional[UUID] = None
     entity_details: Optional[Dict[str, Any]] = None
     legal_disclaimer: str
+
+
+class ULPINValidateRequest(BaseModel):
+    ulpin: str = Field(..., min_length=5, description="ULPIN string to validate")
+    entity_id: Optional[UUID] = None
+    entity_type: Optional[str] = None
+
+
+class ULPINValidateResponse(BaseModel):
+    ulpin: str
+    is_valid_format: bool
+    status: str  # CANDIDATE, VALIDATED, OFFICIAL, EXTERNAL_REFERENCE, INVALID
+    is_official: bool
+    entity_type: Optional[str] = None
+    entity_id: Optional[UUID] = None
+    matched_in_registry: bool
+    validation_checks: Dict[str, Any]
+    legal_disclaimer: str

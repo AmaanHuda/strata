@@ -178,6 +178,7 @@ class Building(Base):
     # Relationships
     parcel = relationship("Parcel", back_populates="buildings")
     floors = relationship("Floor", back_populates="building", cascade="all, delete-orphan", order_by="Floor.floor_number")
+    ulpin_records = relationship("ULPINRecord", back_populates="building")
 
     def expire(self):
         """Expire the current version."""

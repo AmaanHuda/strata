@@ -19,8 +19,12 @@ from app.db.session import Base
 class ULPINStatus:
     PROPOSED = "PROPOSED"
     CANDIDATE = "CANDIDATE"
+    VALIDATED = "VALIDATED"
     NON_AUTHORITATIVE = "NON_AUTHORITATIVE"
+    OFFICIAL = "OFFICIAL"
     AUTHORITATIVE = "AUTHORITATIVE"
+    EXTERNAL_REFERENCE = "EXTERNAL_REFERENCE"
+    INVALID = "INVALID"
 
 
 class ULPINRecord(Base):
@@ -71,5 +75,6 @@ class ULPINRecord(Base):
 
     # Relationships
     parcel = relationship("Parcel", back_populates="ulpin_records")
+    building = relationship("Building", back_populates="ulpin_records")
     floor = relationship("Floor", back_populates="ulpin_records")
     unit = relationship("Unit", back_populates="ulpin_records")

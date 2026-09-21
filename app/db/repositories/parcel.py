@@ -1,4 +1,4 @@
-﻿"""Parcel spatial queries."""
+"""Parcel spatial queries."""
 from typing import List, Optional
 from uuid import UUID
 
@@ -37,9 +37,14 @@ class ParcelRepository(BaseRepository[Parcel]):
         return list(result.scalars().all())
 
     async def find_within_radius(self, lon: float, lat: float, radius_m: float) -> List[Parcel]:
-        point_wkt = f"POINT({lon} {lat})"
+        from sqlalchemy import func
+        from geoalchemy2.functions import ST_SetSRID, ST_Point
+        center_geog = func.cast(ST_SetSRID(ST_Point(lon, lat), 4326), func.geography)
+        parcel_geog = func.cast(Parcel.geometry_2d, func.geography)
         stmt = select(Parcel).where(
-            ST_DWithin(Parcel.geometry_2d, ST_GeomFromText(point_wkt, 4326), radius_m / 111320.0)
+            Parcel.is_active == True,
+            Parcel.geometry_2d.is_not(None),
+            ST_DWithin(parcel_geog, center_geog, radius_m)
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

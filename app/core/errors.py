@@ -52,7 +52,7 @@ class ValidationError(AppError):
         super().__init__(
             code=ErrorCode.VALIDATION_ERROR,
             message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             details=details,
         )
 
@@ -62,7 +62,7 @@ class InvalidGeometryError(AppError):
         super().__init__(
             code=ErrorCode.INVALID_GEOMETRY,
             message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             details=details,
         )
 
@@ -72,7 +72,7 @@ class InvalidCRSError(AppError):
         super().__init__(
             code=ErrorCode.INVALID_CRS,
             message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             details=details,
         )
 
@@ -125,3 +125,7 @@ class AuthorizationError(AppError):
             status_code=status.HTTP_403_FORBIDDEN,
             details=details,
         )
+
+
+# Alias for AuthorizationError (403 Forbidden)
+ForbiddenError = AuthorizationError

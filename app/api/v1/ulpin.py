@@ -9,7 +9,13 @@ from app.db.models.ulpin import ULPINRecord, ULPINStatus
 from app.db.models.user import User, UserRole
 from app.db.session import get_db
 from app.schemas.common import ApiResponse
-from app.schemas.ulpin import ULPINGenerateRequest, ULPINLookupResponse, ULPINOut
+from app.schemas.ulpin import (
+    ULPINGenerateRequest,
+    ULPINLookupResponse,
+    ULPINOut,
+    ULPINValidateRequest,
+    ULPINValidateResponse,
+)
 from app.services.ulpin import ULPINService
 
 router = APIRouter(prefix="/ulpin", tags=["ulpin"])
@@ -24,6 +30,25 @@ async def generate_ulpin(
     svc = ULPINService(db)
     record = await svc.generate_and_store(req, created_by=user.id)
     return ApiResponse(data=ULPINOut.model_validate(record), meta={"message": "Candidate ULPIN generated"})
+
+
+@router.post("/validate", response_model=ApiResponse[ULPINValidateResponse])
+async def validate_ulpin(
+    req: ULPINValidateRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """
+    Validates ULPIN format, registry status, and entity linkage.
+    Distinguishes clearly between CANDIDATE, VALIDATED, and OFFICIAL states.
+    """
+    svc = ULPINService(db)
+    result = await svc.validate_ulpin(
+        ulpin=req.ulpin,
+        entity_id=req.entity_id,
+        entity_type=req.entity_type,
+    )
+    return ApiResponse(data=result)
 
 
 @router.get("/{ulpin_str}", response_model=ApiResponse[ULPINLookupResponse])
