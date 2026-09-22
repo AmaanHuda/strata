@@ -1,5 +1,5 @@
-"""Parcel CRUD and spatial query endpoints."""
-from typing import List, Optional
+"""Parcel CRUD, spatial query, and ML processing endpoints."""
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,6 +69,7 @@ async def get_parcel_buildings(
     buildings = res.scalars().all()
     return ApiResponse(data=[BuildingOut.model_validate(b) for b in buildings], meta={"count": len(buildings)})
 
+
 @router.put("/{parcel_id}", response_model=ApiResponse[ParcelOut])
 async def update_parcel(
     parcel_id: UUID,
@@ -91,6 +92,7 @@ async def update_parcel(
     await db.refresh(new_parcel)
     return ApiResponse(data=ParcelOut.model_validate(new_parcel), meta={"message": "Parcel version updated"})
 
+
 @router.get("/{parcel_id}/history", response_model=ApiResponse[List[ParcelOut]])
 async def get_parcel_history(
     parcel_id: UUID,
@@ -107,6 +109,7 @@ async def get_parcel_history(
     versions = res.scalars().all()
     return ApiResponse(data=[ParcelOut.model_validate(v) for v in versions])
 
+
 @router.get("/{parcel_id}/geojson")
 async def get_parcel_geojson(
     parcel_id: UUID,
@@ -121,3 +124,20 @@ async def get_parcel_geojson(
         raise NotFoundError("Geometry not found or parcel inactive")
     return ApiResponse(data=json.loads(geojson_str))
 
+
+@router.post("/{parcel_id}/process-ml", response_model=ApiResponse[Dict[str, Any]])
+async def process_parcel_ml(
+    parcel_id: UUID,
+    height_m: Optional[float] = Query(None, description="Optional measured height in meters"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(require_roles(UserRole.ADMIN, UserRole.SURVEYOR, UserRole.ANALYST)),
+):
+    """
+    Triggers end-to-end ML Engine pipeline for a parcel:
+    Invokes MLEnginePipeline.process_parcel(), validates ML output contract v1.0.0,
+    maps building/floor/unit entities, and persists with full ML provenance.
+    """
+    from app.integrations.ml_engine.adapter import MLAdapter
+    adapter = MLAdapter(db)
+    result = await adapter.process_parcel_with_ml(parcel_id=parcel_id, height_m=height_m)
+    return ApiResponse(data=result, meta={"message": "ML parcel processing completed and persisted"})

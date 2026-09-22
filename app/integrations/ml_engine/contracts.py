@@ -1,9 +1,9 @@
 """
 ML Engine API contract schemas.
-Defines interfaces for all 9 ML operations + Result Ingestion.
-Any schema changes must be coordinated with 3D-Mapping-ml-engine repo.
+Defines interfaces for all 9 ML operations + Result Ingestion + ML Output Contract v1.0.0.
+Coordinates directly with 3D-Mapping-ml-engine repository schemas.
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Tuple
 from pydantic import BaseModel, ConfigDict, Field
 
 SUPPORTED_SCHEMA_VERSIONS = ["1.0.0", "1.1.0", "2.0.0"]
@@ -112,7 +112,8 @@ class Reconstruction3DResponse(BaseModel):
 
 # 6. Vertical Unit Partitioning
 class VerticalUnitGenRequest(BaseModel):
-    building_id: str
+    floor_id: Optional[str] = None
+    building_id: Optional[str] = None
     floor_number: int
     floor_area_sqm: float
     building_type: str = "residential"
@@ -171,13 +172,63 @@ class OutputValidationResponse(BaseModel):
     violations: List[str] = Field(default_factory=list)
 
 
-# Master ML Ingestion Schema
+# 10. ML Engine Output Contract v1.0.0 (Canonical output from MLEnginePipeline.process_parcel)
+class MLEvidenceItem(BaseModel):
+    source: str
+    type: str
+    reliability: float
+    date: Optional[str] = None
+
+
+class MLValidationBlock(BaseModel):
+    status: str
+    issues: List[str] = Field(default_factory=list)
+
+
+class MLOutputContractV1(BaseModel):
+    """
+    ML Output Contract v1.0.0.
+    Directly matches schemas/ml_output_contract.json produced by MLEnginePipeline.process_parcel().
+    """
+    schema_version: str = "1.0.0"
+    official_ulpin: str
+    building_id: str
+    floor_id: Optional[str] = None
+    unit_id: Optional[str] = None
+    volume_id: Optional[str] = None
+    geometry: Dict[str, Any]
+    geometry_crs: str = "EPSG:4326"
+    height: Optional[float] = None
+    floor_count: Optional[int] = None
+    confidence: float
+    uncertainty: float
+    evidence: List[Dict[str, Any]] = Field(default_factory=list)
+    validation: Dict[str, Any] = Field(default_factory=dict)
+    review_status: str
+    data_status: str
+    model_version: str
+    dataset_version: str
+    provenance_id: str
+    generated_at: str
+
+
+class MLProcessParcelRequest(BaseModel):
+    """Request model for MLEnginePipeline.process_parcel()."""
+    official_ulpin: str = Field(..., description="Official or candidate 2D ULPIN/reference identifier")
+    parcel_polygon: List[Union[List[float], Tuple[float, float]]] = Field(..., description="Parcel boundary coordinates [[lon, lat], ...]")
+    building_footprint: Optional[List[Union[List[float], Tuple[float, float]]]] = Field(None, description="Building footprint coordinates")
+    height_m: Optional[float] = Field(None, description="Building height in meters if available")
+    evidence: Optional[List[Dict[str, Any]]] = Field(None, description="Multi-source evidence list")
+    crs: str = Field("EPSG:4326", description="Coordinate Reference System")
+
+
+# Master ML Ingestion Schema (legacy batch ingestion payload)
 class MLUnitIngest(BaseModel):
     unit_number: str
     unit_type: Optional[str] = "residential"
     area_sqm: Optional[float] = None
     volume_cum: Optional[float] = None
-    confidence: Optional[float] = 0.8
+    confidence: Optional[float] = None
 
 
 class MLFloorIngest(BaseModel):
@@ -185,7 +236,7 @@ class MLFloorIngest(BaseModel):
     floor_label: Optional[str] = None
     floor_use: Optional[str] = None
     height_above_ground_m: Optional[float] = None
-    ceiling_height_m: Optional[float] = 3.0
+    ceiling_height_m: Optional[float] = None
     floor_area_sqm: Optional[float] = None
     units: List[MLUnitIngest] = Field(default_factory=list)
 
@@ -195,8 +246,8 @@ class MLBuildingIngest(BaseModel):
     building_type: Optional[str] = "residential"
     footprint_wkt: str
     height_m: float
-    height_confidence: Optional[float] = 0.85
-    uncertainty_range_m: Optional[float] = 1.0
+    height_confidence: Optional[float] = None
+    uncertainty_range_m: Optional[float] = None
     floor_count: int
     floors: List[MLFloorIngest] = Field(default_factory=list)
 

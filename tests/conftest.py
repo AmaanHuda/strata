@@ -137,13 +137,42 @@ class MockAsyncSession:
                     return MockQueryResult(matching)
 
             return MockQueryResult(jobs)
+        if "from parcels" in stmt_str:
+            from app.db.models.property import Parcel
+            if "parcels.id =" in stmt_str or "parcels.id ==" in stmt_str:
+                target_id = None
+                if hasattr(statement, "compile"):
+                    for val in statement.compile().params.values():
+                        try:
+                            target_id = uuid.UUID(str(val))
+                            break
+                        except Exception:
+                            pass
+                if target_id and target_id in self._store.entities:
+                    return MockQueryResult([self._store.entities[target_id]])
+                return MockQueryResult([])
+            return MockQueryResult([])
+
         if "from buildings" in stmt_str:
             from app.db.models.property import Building
             bldgs = [v for v in self._store.entities.values() if isinstance(v, Building)]
+            if "buildings.id =" in stmt_str or "buildings.id ==" in stmt_str:
+                target_id = None
+                if hasattr(statement, "compile"):
+                    for val in statement.compile().params.values():
+                        try:
+                            target_id = uuid.UUID(str(val))
+                            break
+                        except Exception:
+                            pass
+                if target_id and target_id in self._store.entities:
+                    return MockQueryResult([self._store.entities[target_id]])
+                return MockQueryResult([])
             return MockQueryResult(bldgs)
         if "count(" in stmt_str:
             return MockQueryResult([len(self._store.entities)])
         return MockQueryResult([])
+
 
     async def get(self, entity, ident):
         return self._store.get(entity, ident)
@@ -174,6 +203,7 @@ class MockAsyncSession:
 @pytest.fixture(autouse=True)
 def mock_db_override():
     """Overrides get_db with in-memory MockAsyncSession for all tests."""
+    _global_test_store.entities.clear()
     async def _override_get_db():
         session = MockAsyncSession(_global_test_store)
         try:
@@ -184,6 +214,8 @@ def mock_db_override():
     app.dependency_overrides[get_db] = _override_get_db
     yield
     app.dependency_overrides.pop(get_db, None)
+    _global_test_store.entities.clear()
+
 
 
 @pytest_asyncio.fixture

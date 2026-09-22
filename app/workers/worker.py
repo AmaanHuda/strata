@@ -260,6 +260,30 @@ async def process_job_async(job_id: UUID) -> None:
                 job.progress = 100.0
                 job.status = JobStatus.COMPLETED
 
+            elif job.job_type in ("ml_process_parcel", "process_parcel"):
+                if settings.ML_ENGINE_ENABLED:
+                    from app.integrations.ml_engine.adapter import MLAdapter
+                    payload = job.payload or {}
+                    parcel_id_str = payload.get("parcel_id")
+                    if parcel_id_str:
+                        adapter = MLAdapter(db)
+                        res = await adapter.process_parcel_with_ml(
+                            parcel_id=UUID(parcel_id_str),
+                            height_m=payload.get("height_m"),
+                            evidence=payload.get("evidence"),
+                        )
+                        job.result = res
+                    else:
+                        job.result = {"status": "error", "message": "Missing parcel_id in payload"}
+                else:
+                    job.result = {
+                        "status": "decoupled",
+                        "message": "ML Engine integration is disabled. Set ML_ENGINE_ENABLED=true in config.",
+                    }
+                job.progress = 100.0
+                job.status = JobStatus.COMPLETED
+
+
             else:
                 job.result = {"status": "completed", "message": f"Processed job of type {job.job_type}"}
                 job.progress = 100.0
