@@ -1,0 +1,15 @@
+{
+  "name": "Copernicus DEM GLO-30 (Global 30m DEM)",
+  "source": "ESA Copernicus / European Space Agency",
+  "url": "https://registry.opendata.aws/copernicus-dem/",
+  "geography": "Global (India fully covered)",
+  "date": "2021 (primary acquisition 2011-2015, processed 2019-2020)",
+  "resolution": "30m (1 arc-second); 90m version also available",
+  "crs": "EPSG:4326 (WGS84 geographic), heights referenced to EGM2008",
+  "labels": "Surface elevation (DSM, not bare-earth DTM). Includes buildings and vegetation.",
+  "license": "Copernicus DEM — free for any use including commercial. Attribution required. See: https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model",
+  "provenance": "Freely downloadable from AWS Open Data Registry (no registration required). Also available via OpenTopography.",
+  "status": "REAL",
+  "limitations": "30m resolution insufficient for individual building height. DSM includes canopy and building surfaces — not bare-earth. Urban canyon and bridge artefacts possible. Vertical accuracy approx 4m RMSE globally. Use as coarse terrain reference only — not as ground truth for building heights.",
+  "intended_use": "Task 3 (coarse terrain context for height estimation fallback), Task 2 (DEM processing pipeline testing)"
+}

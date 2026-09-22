@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "dataset_manifest_v1.0.0",
+  "title": "Dataset Manifest",
+  "description": "Required manifest for every dataset used in SIH 2026 PS 26011 ML engine.",
+  "type": "object",
+  "required": [
+    "name",
+    "source",
+    "url",
+    "geography",
+    "date",
+    "resolution",
+    "crs",
+    "labels",
+    "license",
+    "provenance",
+    "status",
+    "limitations",
+    "intended_use"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "geography": {
+      "type": "string",
+      "description": "State, district, or region in India"
+    },
+    "date": {
+      "type": "string",
+      "description": "YYYY-MM or YYYY"
+    },
+    "resolution": {
+      "type": "string",
+      "description": "e.g. 0.5m GSD, 1m DEM, N/A for vector"
+    },
+    "crs": {
+      "type": "string",
+      "description": "EPSG code or description"
+    },
+    "labels": {
+      "type": "string",
+      "description": "Description of available labels/annotations"
+    },
+    "license": {
+      "type": "string"
+    },
+    "provenance": {
+      "type": "string",
+      "description": "How was this data obtained"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "REAL",
+        "DERIVED",
+        "SYNTHETIC",
+        "INFERRED",
+        "MIXED"
+      ]
+    },
+    "limitations": {
+      "type": "string"
+    },
+    "intended_use": {
+      "type": "string",
+      "description": "Which ML task(s) this supports"
+    }
+  },
+  "additionalProperties": false
+}

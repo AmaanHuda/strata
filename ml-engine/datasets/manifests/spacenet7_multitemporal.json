@@ -1,0 +1,15 @@
+{
+  "name": "SpaceNet 7 — Multi-Temporal Urban Development",
+  "source": "SpaceNet LLC / DigitalGlobe / AWS",
+  "url": "https://spacenet.ai/sn7-challenge/",
+  "geography": "Global (101 Areas of Interest; includes South Asian / Indian subcontinent sites)",
+  "date": "2017-2020 (monthly imagery sequences per AOI)",
+  "resolution": "~0.8m GSD (Planet Labs SkySat)",
+  "crs": "EPSG:4326 (GeoJSON labels); UTM projected tiles",
+  "labels": "Building footprint polygons (GeoJSON) per monthly image. Temporal sequence allows change detection labels. NOT cadastral ground truth — crowd-sourced from imagery.",
+  "license": "SpaceNet Dataset License — free for research and non-commercial use. Commercial use requires separate licensing. See: https://spacenet.ai/spacenet-dataset-license/",
+  "provenance": "Available via AWS S3 (spacenet-dataset bucket) and Radiant MLHub. aws s3 ls s3://spacenet-dataset/SpaceNet7/",
+  "status": "REAL",
+  "limitations": "Labels are building footprints only — no height, floor, or unit data. Indian-subcontinent AOIs may not cover target districts. Labels are derived from imagery interpretation, not official cadastral records. NOT authoritative for Indian land records. Suitable as benchmark/pre-training only.",
+  "intended_use": "Task 1 (building extraction — pre-training / benchmark), Task 8 (change detection — multi-temporal training)"
+}

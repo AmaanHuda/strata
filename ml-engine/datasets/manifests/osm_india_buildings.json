@@ -1,0 +1,15 @@
+{
+  "name": "OpenStreetMap India — Building Footprints",
+  "source": "OpenStreetMap Contributors (crowd-sourced)",
+  "url": "https://download.geofabrik.de/asia/india.html",
+  "geography": "India (national coverage; urban areas better mapped than rural)",
+  "date": "Continuously updated; snapshot date must be recorded at download time",
+  "resolution": "Vector polygons (no inherent resolution); accuracy varies by contributor and region",
+  "crs": "EPSG:4326 (WGS84 geographic)",
+  "labels": "Building footprint polygons. Some records include: building:levels (floor count), height, building type. Data completeness and accuracy vary widely by city.",
+  "license": "Open Database License (ODbL) v1.0. Attribution required: (c) OpenStreetMap contributors.",
+  "provenance": "Available via Geofabrik India extract (updated daily). Also accessible via Overpass API for targeted queries.",
+  "status": "DERIVED",
+  "limitations": "CROWD-SOURCED — NOT authoritative cadastral data. NOT official Indian government data. Significant incompleteness in rural and peri-urban areas. Building levels and height data sparse (<10% of buildings). Positional accuracy unverified at cadastral scale. DO NOT use as ground truth for legal/registration purposes. Suitable as noisy pseudo-labels or validation reference only.",
+  "intended_use": "Task 1 (building extraction — noisy pseudo-label reference), Task 4 (floor detection — weak supervision where building:levels available)"
+}

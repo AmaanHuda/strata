@@ -1,0 +1,15 @@
+{
+  "name": "SRTM 30m (Shuttle Radar Topography Mission)",
+  "source": "NASA / USGS",
+  "url": "https://earthexplorer.usgs.gov/",
+  "geography": "Global 56S–60N (India fully covered)",
+  "date": "February 2000 (single acquisition mission)",
+  "resolution": "30m (1 arc-second, SRTM1)",
+  "crs": "EPSG:4326 (WGS84 geographic), heights referenced to EGM96",
+  "labels": "Surface elevation (DSM). Radar-derived; includes vegetation and buildings.",
+  "license": "Public domain (US government work). Freely downloadable.",
+  "provenance": "NASA EarthExplorer or USGS Earth Resources Observation and Science (EROS) Center. No registration required for download.",
+  "status": "REAL",
+  "limitations": "2000 vintage — does not reflect post-2000 construction. 30m resolution insufficient for building-level analysis. Radar voids in steep terrain and water bodies. Layover artefacts in dense urban areas. Significant age limitation for change detection use. Use for terrain baseline only.",
+  "intended_use": "Task 3 (terrain baseline / fallback DEM), Task 2 (pipeline compatibility testing)"
+}

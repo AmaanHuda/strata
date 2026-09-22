@@ -103,10 +103,10 @@ class MLEngineClient:
 
         # 2. In-process fallback if 3D-Mapping-ml-engine repository is present locally
         try:
-            # Check potential ml-engine directory paths
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "3D-Mapping-ml-engine"
+            # Check integrated ml-engine/ inside the monorepo root
+            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
             if not ml_dir.exists():
-                ml_dir = Path.cwd().parent / "3D-Mapping-ml-engine"
+                ml_dir = Path.cwd() / "ml-engine"
 
             if ml_dir.exists() and str(ml_dir) not in sys.path:
                 sys.path.insert(0, str(ml_dir))
@@ -163,7 +163,7 @@ class MLEngineClient:
                 return HeightEstimationResponse(**res.json())
         except Exception:
             # Try in-process fallback
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "3D-Mapping-ml-engine"
+            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
             if ml_dir.exists() and str(ml_dir) not in sys.path:
                 sys.path.insert(0, str(ml_dir))
             from src.height.estimator import BuildingHeightEstimator
@@ -196,7 +196,7 @@ class MLEngineClient:
                 res.raise_for_status()
                 return FloorCountResponse(**res.json())
         except Exception:
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "3D-Mapping-ml-engine"
+            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
             if ml_dir.exists() and str(ml_dir) not in sys.path:
                 sys.path.insert(0, str(ml_dir))
             from src.floors.detector import FloorCountDetector
@@ -230,7 +230,7 @@ class MLEngineClient:
                 res.raise_for_status()
                 return VerticalUnitGenResponse(**res.json())
         except Exception:
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / "3D-Mapping-ml-engine"
+            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
             if ml_dir.exists() and str(ml_dir) not in sys.path:
                 sys.path.insert(0, str(ml_dir))
             from src.units.segmenter import UnitSegmenter

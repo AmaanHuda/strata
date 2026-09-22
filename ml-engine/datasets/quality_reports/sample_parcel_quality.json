@@ -1,0 +1,15 @@
+{
+  "status": "WARNING",
+  "issues": [
+    "WARNING: shapely not installed \u2014 geometry validation skipped",
+    "INFO: No CRS field in GeoJSON \u2014 assuming EPSG:4326 per RFC 7946"
+  ],
+  "stats": {
+    "feature_count": 1,
+    "crs_field": "None"
+  },
+  "file": "tests\\fixtures\\sample_parcel.geojson",
+  "type": "geojson",
+  "checked_at": "2026-09-11T20:39:37.823910Z",
+  "file_size_bytes": 727
+}

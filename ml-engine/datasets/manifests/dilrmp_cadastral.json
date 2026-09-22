@@ -1,0 +1,15 @@
+{
+  "name": "DILRMP — Digital India Land Records Modernisation Programme (Cadastral Vector Data)",
+  "source": "Department of Land Resources (DoLR), Ministry of Rural Development, Government of India",
+  "url": "https://dilrmp.gov.in/",
+  "geography": "India (state-by-state; digitisation status varies)",
+  "date": "Varies by state; ongoing digitisation programme",
+  "resolution": "Vector cadastral polygons; accuracy varies by state and survey vintage",
+  "crs": "Varies by state (legacy CRS may include Everest 1830, WGS84, local systems); must be verified per state",
+  "labels": "Parcel boundaries, khasra numbers, land use. No building or 3D data.",
+  "license": "Government of India data. Access governed by DILRMP data sharing policy and individual state land record laws. Must request through official channels.",
+  "provenance": "Data available through state-level land record portals (Bhulekh, Dharani, WebLand, etc.) and in some cases through data.gov.in. Bulk/programmatic access requires state government approval.",
+  "status": "REAL",
+  "limitations": "ACCESS RESTRICTED — must follow government data sharing protocol. CRS varies by state and may be in legacy datums requiring transformation. Building information NOT included. ULPIN linkage present in modernised states only. Digitisation completeness varies from <50% in some states to near-complete in others. Rural parcels may have large positional errors.",
+  "intended_use": "Ground anchor: official 2D parcel boundaries (ULPIN linkage). NOT for building or height tasks. Required for aligning ML outputs to official cadastral parcels."
+}

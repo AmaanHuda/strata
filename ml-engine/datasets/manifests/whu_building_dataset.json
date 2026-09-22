@@ -1,0 +1,15 @@
+{
+  "name": "WHU Building Dataset (Aerial + Satellite)",
+  "source": "Wuhan University — State Key Laboratory of Information Engineering in Surveying, Mapping and Remote Sensing",
+  "url": "http://gpcv.whu.edu.cn/data/building_dataset.html",
+  "geography": "New Zealand (aerial subset); Global satellite subset. NOT India-specific.",
+  "date": "2018 (static dataset)",
+  "resolution": "0.075m–0.3m (aerial subset); 0.5m (satellite subset)",
+  "crs": "EPSG:32760 (New Zealand aerial subset); WGS84 for satellite subset",
+  "labels": "Binary building footprint masks (raster). Large-scale: 220k+ buildings annotated.",
+  "license": "Free for research use with attribution. Commercial use requires permission from WHU.",
+  "provenance": "Direct download from WHU GPCV Lab. Dataset paper: Ji et al., 2018.",
+  "status": "REAL",
+  "limitations": "NOT Indian data. NOT cadastral. New Zealand and global morphology differs from Indian cities. Use for pre-training only. Domain adaptation required before use on Indian imagery.",
+  "intended_use": "Task 1 (building extraction — pre-training; domain gap must be assessed and documented)"
+}

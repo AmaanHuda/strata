@@ -1,0 +1,15 @@
+{
+  "name": "Cartosat-1 DEM (CartoDEM v3 R1)",
+  "source": "NRSC / ISRO — CartoDEM",
+  "url": "https://bhuvan.nrsc.gov.in/bhuvan_links.php#",
+  "geography": "India (complete national coverage)",
+  "date": "2016 (v3 R1); updated tiles available",
+  "resolution": "30m spatial resolution; ~8m vertical accuracy (open terrain)",
+  "crs": "EPSG:4326 (WGS84), heights in EGM96 geoid",
+  "labels": "Terrain elevation only (DTM). No building labels.",
+  "license": "NRSC data policy. Free for research; registration required at Bhuvan portal.",
+  "provenance": "Available via Bhuvan Geoportal DEM downloads section after user registration.",
+  "status": "REAL",
+  "limitations": "30m resolution insufficient for individual building height estimation. Useful for terrain correction (DTM baseline) and coarse building height context. Urban areas may have significant vertical error due to building interference. For building-scale height, LiDAR or photogrammetric DSM required.",
+  "intended_use": "Task 3 (terrain baseline / DTM for nDSM calculation), Task 2 (point cloud ground reference)"
+}

@@ -1,41 +1,89 @@
-# STRATA 3D-Mapping Backend
+# STRATA 3D-Mapping — Monorepo
 
 **SIH 2026 PS26011 — 3D ULPIN Generation & Vertical Property Mapping System**
 
-Production-ready FastAPI backend for managing 3D cadastral data, ULPIN generation, spatial queries, and async batch processing.
+This repository contains both the **Backend** (FastAPI) and the **ML Engine** (FastAPI) as separate
+modules in a single monorepo. Their responsibilities are kept cleanly separated.
 
-> See [`BACKEND_INTEGRATION_GUIDE.md`](./BACKEND_INTEGRATION_GUIDE.md) for the full API reference for frontend and ML Engine teams.
+> See [`BACKEND_INTEGRATION_GUIDE.md`](./BACKEND_INTEGRATION_GUIDE.md) for the full API reference.
 
 ---
 
-## Architecture
+## Repository Structure
 
 ```
-Frontend (React/Cesium/Three.js)
+3D-MAPPING/
+├── app/                    ← Backend (FastAPI + SQLAlchemy + PostGIS)
+│   ├── api/                  API routes
+│   ├── core/                 Config, auth, errors, logging
+│   ├── db/                   ORM models, repositories, migrations
+│   ├── integrations/
+│   │   └── ml_engine/        Backend ↔ ML Engine boundary
+│   │       ├── client.py       Async HTTP client (HTTPX)
+│   │       ├── contracts.py    Pydantic request/response schemas
+│   │       ├── adapter.py      Orchestrates ML call + DB persist
+│   │       └── mapper.py       Maps ML output → ORM entities
+│   ├── services/
+│   ├── schemas/
+│   └── workers/
+├── ml-engine/              ← ML Engine (FastAPI, separate service)
+│   ├── src/                  ML source modules
+│   │   ├── server.py           FastAPI app (port 8001)
+│   │   ├── inference/          MLEnginePipeline orchestrator
+│   │   ├── building_extraction/
+│   │   ├── height/
+│   │   ├── floors/
+│   │   ├── units/
+│   │   ├── reconstruction/
+│   │   ├── fusion/
+│   │   ├── confidence/
+│   │   ├── geospatial/
+│   │   ├── change_detection/
+│   │   ├── validation/
+│   │   └── preprocessing/
+│   ├── datasets/             Dataset manifests (9 Indian/benchmark sources)
+│   ├── models/               Model checkpoints (empty until weights available)
+│   ├── schemas/              ml_output_contract.json (v1.0.0)
+│   ├── scripts/              Benchmark + validation utilities
+│   ├── tests/                53 unit tests (100% passing)
+│   ├── docs/                 ML specification & audit documents
+│   ├── pyproject.toml
+│   └── Dockerfile
+├── alembic/                ← DB migrations (backend)
+├── tests/                  ← Backend tests
+├── docker-compose.yml      ← Runs db, redis, backend, worker, ml-engine
+├── .env.example
+└── README.md
+```
+
+> **Note on naming:** The backend application module is `app/` (not `backend/`).
+> Renaming it would break all Python imports, Alembic config, and Docker paths.
+> The README refers to it as "Backend" conceptually.
+
+---
+
+## Service Boundary
+
+```
+Frontend (React / Cesium / Three.js)
     │
-    ▼ REST API
-FastAPI Backend  ← This Repository
+    ▼  REST API (port 8000)
+Backend / FastAPI  ──────────────────────────────── app/
+    │  app/integrations/ml_engine/client.py
+    │  ML_ENGINE_URL=http://ml-engine:8001
+    ▼  HTTP POST /process/parcel
+ML Engine / FastAPI  ────────────────────────────── ml-engine/src/server.py
     │
-    ├── PostgreSQL 16 + PostGIS 3.4   (spatial data + GiST indexes)
-    ├── Redis                          (async task queue: strata:jobs:queue)
-    ├── Background Worker             (async event loop, no Celery)
-    └── ML Engine (decoupled)  ──────→ 3D-Mapping-ml-engine (future integration)
+    ▼  MLEnginePipeline.process_parcel()
+ML Output Contract v1.0.0  ──────────────────────── ml-engine/schemas/ml_output_contract.json
+    │
+    ▼  MLDataMapper.contract_v1_to_entities()
+Backend validation + PostGIS persistence
 ```
 
-**Layer Pattern:** `Routes → Schemas → Services → Repositories → DB`
-
-**Property Hierarchy:**
-```
-Parcel (land plot)
-  └── Building
-        └── Floor
-              └── Unit (apartment / shop / office)
-```
-
-Each entity can receive a **ULPIN** (Unique Land Parcel Identification Number).
-
-> ⚠️ **Candidate ULPINs** are AI/computational outputs only. They do NOT constitute
-> authoritative legal cadastral records until verified by a competent authority.
+**Key rule:** `ML_ENGINE_ENABLED=false` by default.
+The backend raises `MLEngineNotAvailableError` — it never returns fabricated predictions.
+Set `ML_ENGINE_ENABLED=true` and start the ml-engine service to activate real inference.
 
 ---
 
@@ -50,7 +98,7 @@ Each entity can receive a **ULPIN** (Unique Land Parcel Identification Number).
 | Auth | JWT (python-jose) + bcrypt |
 | Task Queue | Redis (async `blpop` consumer, no Celery) |
 | Geometry | Shapely + GeoAlchemy2 + PostGIS |
-| ML Integration | HTTPX async client (decoupled, future phase) |
+| ML Integration | HTTPX async client (decoupled, activate via env) |
 | Testing | pytest-asyncio + HTTPX AsyncClient |
 | Containerization | Docker + Docker Compose |
 
@@ -268,13 +316,42 @@ Copy `.env.example` to `.env`. Key variables:
 
 ---
 
-## ML Engine Integration (Future Phase)
+## ML Engine Integration
 
-The ML Engine is fully decoupled. Set `ML_ENGINE_ENABLED=true` and configure `ML_ENGINE_URL` to enable:
-- Height estimation: `POST /api/v1/buildings/{id}/estimate-height`
-- Floor count estimation (job type `height_estimation`)
+The ML Engine is integrated as `ml-engine/` in this monorepo and runs as a separate FastAPI service.
 
-Contracts are defined in `app/integrations/ml_engine/contracts.py`.
+**ML Engine API (port 8001):**
+- `GET  /health` — liveness probe
+- `POST /process/parcel` — end-to-end ML inference (`MLEnginePipeline.process_parcel`)
+- `POST /predict/height` — height estimation
+- `POST /predict/floors` — floor count estimation
+- `POST /generate/vertical-units` — vertical unit segmentation
+
+**Activating the ML Engine:**
+```bash
+# In .env:
+ML_ENGINE_ENABLED=true
+ML_ENGINE_URL=http://ml-engine:8001   # Docker Compose internal name
+
+# Start all services including ml-engine:
+docker compose up -d
+
+# Or run ML Engine standalone (local dev):
+cd ml-engine
+uvicorn src.server:app --host 0.0.0.0 --port 8001 --reload
+```
+
+**ML Engine tests (no DB needed):**
+```bash
+cd ml-engine
+pytest tests/unit/ -v
+```
+
+**When `ML_ENGINE_ENABLED=false` (default):** the backend raises `MLEngineNotAvailableError` — 
+it never fabricates synthetic predictions.
+
+Contracts: `app/integrations/ml_engine/contracts.py`
+ML Output Schema: `ml-engine/schemas/ml_output_contract.json`
 
 ---
 

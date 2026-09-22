@@ -1,0 +1,40 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "ulpin": "MH-MUM-2026-0001",
+        "survey_no": "123/4",
+        "area_sqm": 450.0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              72.825,
+              18.975
+            ],
+            [
+              72.826,
+              18.975
+            ],
+            [
+              72.826,
+              18.976
+            ],
+            [
+              72.825,
+              18.976
+            ],
+            [
+              72.825,
+              18.975
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

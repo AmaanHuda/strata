@@ -1,0 +1,15 @@
+{
+  "name": "Bhuvan Cartosat-3 Ortho Imagery (India)",
+  "source": "ISRO / NRSC — Bhuvan National Geoportal",
+  "url": "https://bhuvan.nrsc.gov.in/bhuvan_links.php",
+  "geography": "Pan-India (state/district selection available)",
+  "date": "2019-present",
+  "resolution": "0.25m GSD (Cartosat-3 PAN); 1m multi-spectral",
+  "crs": "EPSG:4326 (WGS84 geographic); projected tiles in UTM",
+  "labels": "No building labels — raw imagery only. Building footprints must be derived separately.",
+  "license": "National Remote Sensing Centre (NRSC) data policy. Non-commercial research use subject to NRSC approval and data sharing agreement.",
+  "provenance": "Requested through Bhuvan Geoportal or NRSC Data Dissemination Policy portal. User registration required.",
+  "status": "REAL",
+  "limitations": "Access requires NRSC/ISRO registration and project justification. High-resolution data (sub-1m) may require additional clearance. Cloud cover varies by season. No building-level labels included.",
+  "intended_use": "Task 1 (building extraction imagery source), Task 3 (height estimation visual context), Task 8 (change detection — multi-temporal)"
+}

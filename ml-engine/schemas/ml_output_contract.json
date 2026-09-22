@@ -1,0 +1,204 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "ml_output_contract_v1.0.0",
+  "title": "ML Output Contract",
+  "description": "SIH 2026 PS 26011 — ML engine output contract v1.0.0. Candidate 3D property volume with evidence and confidence. NOT a legal determination.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "official_ulpin",
+    "building_id",
+    "geometry",
+    "geometry_crs",
+    "confidence",
+    "uncertainty",
+    "review_status",
+    "data_status",
+    "validation",
+    "model_version",
+    "dataset_version",
+    "provenance_id",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "official_ulpin": {
+      "type": "string",
+      "description": "Official 2D ULPIN — must not be replaced or fabricated."
+    },
+    "building_id": {
+      "type": "string"
+    },
+    "floor_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "unit_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "volume_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Proposed application-level 3D identity. Illustrative only. NOT an official government format."
+    },
+    "geometry": {
+      "type": "object",
+      "description": "GeoJSON geometry. PolygonZ or MultiPolygonZ preferred for 3D. Document interoperability limitations.",
+      "required": [
+        "type",
+        "coordinates"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "Polygon",
+            "MultiPolygon",
+            "GeometryCollection"
+          ]
+        },
+        "coordinates": {}
+      }
+    },
+    "geometry_crs": {
+      "type": "string",
+      "pattern": "^EPSG:\\d+$"
+    },
+    "height": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Building height in metres above ground. Null if unknown."
+    },
+    "floor_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "uncertainty": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "type",
+          "reliability"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "satellite",
+              "lidar",
+              "drone",
+              "plan",
+              "bim",
+              "gnss",
+              "cadastral",
+              "dem",
+              "dsm",
+              "dtm",
+              "utility",
+              "temporal",
+              "other"
+            ]
+          },
+          "reliability": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "required": [
+        "status",
+        "issues"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "VALID",
+            "INVALID",
+            "REVIEW_REQUIRED"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "review_status": {
+      "type": "string",
+      "enum": [
+        "APPROVED",
+        "REVIEW_REQUIRED",
+        "INSUFFICIENT_EVIDENCE",
+        "LOW_CONFIDENCE",
+        "SOURCE_CONFLICT"
+      ]
+    },
+    "data_status": {
+      "type": "string",
+      "enum": [
+        "REAL",
+        "DERIVED",
+        "SYNTHETIC",
+        "INFERRED",
+        "MIXED"
+      ]
+    },
+    "model_version": {
+      "type": "string"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "provenance_id": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

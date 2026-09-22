@@ -1,4 +1,4 @@
-﻿__pycache__/
+__pycache__/
 *.py[cod]
 *.pyo
 .env
@@ -14,3 +14,15 @@ htmlcov/
 *.db
 .DS_Store
 Thumbs.db
+
+# ── ML Engine artifacts ───────────────────────────────────────────────────────
+ml-engine/__pycache__/
+ml-engine/.pytest_cache/
+ml-engine/models/checkpoints/*.pt
+ml-engine/models/checkpoints/*.pth
+ml-engine/models/checkpoints/*.bin
+ml-engine/models/registry/*.pt
+ml-engine/models/registry/*.pth
+ml-engine/datasets/raw/
+ml-engine/datasets/processed/
+ml-engine/reports/

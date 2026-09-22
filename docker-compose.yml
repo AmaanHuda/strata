@@ -27,6 +27,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── ML Engine Service ──────────────────────────────────────────────────────
+  # Builds from ml-engine/ (src/server.py FastAPI app).
+  # Backend communicates with this via ML_ENGINE_URL=http://ml-engine:8001.
+  # Enable: set ML_ENGINE_ENABLED=true in the backend/worker environment below.
+  ml-engine:
+    build:
+      context: ./ml-engine
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - ML_ENGINE_LOG_LEVEL=${ML_ENGINE_LOG_LEVEL:-INFO}
+      - ML_ENGINE_WORKERS=${ML_ENGINE_WORKERS:-1}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/health')\""]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   backend:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
