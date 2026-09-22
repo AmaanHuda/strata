@@ -13,8 +13,7 @@ from app.db.session import Base
 
 class JobStatus:
     QUEUED = "QUEUED"
-    PROCESSING = "PROCESSING"
-    RUNNING = "RUNNING"  # Backward compatibility alias for PROCESSING
+    PROCESSING = "PROCESSING"   # canonical in-flight status
     VALIDATING = "VALIDATING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"

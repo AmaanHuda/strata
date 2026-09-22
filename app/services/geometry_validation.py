@@ -3,6 +3,10 @@
 Ensures topological consistency, valid rings, non-self-intersecting polygons,
 proper 3D elevations, positive volume/area, and metric projection conversions.
 Never calculates metric distances/areas in geographic degrees.
+
+Area calculation uses pyproj to project geometries to EPSG:7755 (GCS India 2014)
+for accurate metric area. Falls back to equirectangular approximation with a
+warning flag when pyproj is unavailable.
 """
 import math
 from typing import Any, Dict, List, Optional, Tuple
@@ -11,6 +15,15 @@ from shapely.geometry import Polygon, MultiPolygon, shape
 from shapely.validation import explain_validity
 
 from app.core.errors import InvalidGeometryError, InvalidCRSError
+
+try:
+    from pyproj import Transformer
+    _PYPROJ_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _PYPROJ_AVAILABLE = False
+
+# EPSG:7755 = GCS India 2014 (national projected CRS for metric calculations)
+_INDIA_PROJECTED_EPSG = 7755
 
 
 SUPPORTED_CRS = {"EPSG:4326", "EPSG:3857", "EPSG:32643", "EPSG:32644", "EPSG:7755"}
@@ -60,21 +73,44 @@ class GeometryValidationService:
                 if coords[i] == coords[i + 1]:
                     raise InvalidGeometryError(f"Duplicate consecutive vertex found at index {i}")
 
-        # Approximate metric area calculation via equirectangular projection at geometry center
+        # Metric area via projected CRS (EPSG:7755 — India GCS 2014).
+        # Never use raw degree-based area for metric calculations.
         bounds = geom.bounds  # minx, miny, maxx, maxy (lon, lat)
-        center_lat = (bounds[1] + bounds[3]) / 2.0
-        # 1 deg lat ~ 111,320m, 1 deg lon ~ 111,320m * cos(lat)
-        lat_scale = 111320.0
-        lon_scale = 111320.0 * math.cos(math.radians(center_lat))
-        # Approx metric area
-        raw_deg_area = geom.area
-        approx_metric_area_sqm = raw_deg_area * lat_scale * lon_scale
+        area_method = "equirectangular_fallback"
+        metric_area_sqm: float = 0.0
+
+        if _PYPROJ_AVAILABLE:
+            try:
+                transformer = Transformer.from_crs(
+                    "EPSG:4326", f"EPSG:{_INDIA_PROJECTED_EPSG}", always_xy=True
+                )
+                projected = wkt.loads(wkt_str)
+                # Transform geometry coordinates to projected CRS
+                from shapely.ops import transform as shapely_transform
+                proj_geom = shapely_transform(transformer.transform, projected)
+                metric_area_sqm = float(proj_geom.area)
+                area_method = f"projected_EPSG:{_INDIA_PROJECTED_EPSG}"
+            except Exception:
+                # Fall back to equirectangular approximation
+                center_lat = (bounds[1] + bounds[3]) / 2.0
+                lat_scale = 111320.0
+                lon_scale = 111320.0 * math.cos(math.radians(center_lat))
+                metric_area_sqm = float(geom.area) * lat_scale * lon_scale
+                area_method = "equirectangular_fallback"
+        else:
+            # pyproj not installed — use equirectangular approximation
+            center_lat = (bounds[1] + bounds[3]) / 2.0
+            lat_scale = 111320.0
+            lon_scale = 111320.0 * math.cos(math.radians(center_lat))
+            metric_area_sqm = float(geom.area) * lat_scale * lon_scale
+            area_method = "equirectangular_fallback"
 
         return {
             "is_valid": True,
             "geom_type": geom.geom_type,
             "bounds": bounds,
-            "approx_metric_area_sqm": round(approx_metric_area_sqm, 2),
+            "metric_area_sqm": round(metric_area_sqm, 2),
+            "area_method": area_method,
             "num_points": len(geom.exterior.coords) if geom.geom_type == "Polygon" else sum(len(p.exterior.coords) for p in geom.geoms),
         }
 
@@ -113,9 +149,11 @@ class GeometryValidationService:
             for flr in sorted_floors:
                 num = flr.get("floor_number", 0)
                 flr_height = flr.get("height_above_ground_m")
-                ceiling_h = flr.get("ceiling_height_m", 3.0) or 3.0
+                ceiling_h = flr.get("ceiling_height_m")
 
-                if ceiling_h <= 0:
+                # Only validate ceiling height if it is explicitly provided.
+                # Do NOT invent a 3.0m default — missing data must remain NULL.
+                if ceiling_h is not None and ceiling_h <= 0:
                     errors.append(f"Floor {num} has non-positive ceiling height: {ceiling_h}m")
 
                 if flr_height is not None:
@@ -124,11 +162,18 @@ class GeometryValidationService:
                     if num < 0 and flr_height > 0:
                         warnings.append(f"Basement floor {num} has positive elevation above ground ({flr_height}m)")
 
-            # Check if total calculated floor height matches building height
+            # Check if total calculated floor height matches building height.
+            # Only run this check when all above-ground floors have ceiling heights supplied.
             if height_m and len(sorted_floors) > 0:
-                expected_total_h = sum((f.get("ceiling_height_m") or 3.0) for f in sorted_floors if f.get("floor_number", 0) >= 0)
-                if abs(expected_total_h - height_m) > 5.0:
-                    warnings.append(f"Sum of floor ceiling heights ({expected_total_h}m) differs from estimated building height ({height_m}m)")
+                above_ground = [f for f in sorted_floors if f.get("floor_number", 0) >= 0]
+                floors_with_ceiling = [f for f in above_ground if f.get("ceiling_height_m") is not None]
+                if floors_with_ceiling and len(floors_with_ceiling) == len(above_ground):
+                    expected_total_h = sum(f["ceiling_height_m"] for f in floors_with_ceiling)
+                    if abs(expected_total_h - height_m) > 5.0:
+                        warnings.append(
+                            f"Sum of floor ceiling heights ({expected_total_h}m) differs "
+                            f"from building height ({height_m}m)"
+                        )
 
         if errors:
             raise InvalidGeometryError(f"3D Geometry validation failed: {'; '.join(errors)}")

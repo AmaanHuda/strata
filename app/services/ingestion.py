@@ -234,14 +234,16 @@ class MLIngestionService:
                 except Exception:
                     pass
 
-        # Data quality summary
+        # Data quality summary — use actual confidence from payload, not a fabricated value.
+        # payload.confidence_score is None when the ML source did not report it.
+        actual_confidence = getattr(payload, "confidence_score", None)
         dq_report = DataQualityService.evaluate(
             has_geometry=True,
             is_geometry_valid=True,
             crs=payload.source_crs,
-            confidence_score=0.85,
-            has_height=True,
-            has_floors=True,
+            confidence_score=actual_confidence,
+            has_height=any(b.height_m is not None for b in payload.buildings),
+            has_floors=any(len(b.floors) > 0 for b in payload.buildings),
             source_authority=payload.model_name,
         )
 

@@ -129,3 +129,22 @@ class AuthorizationError(AppError):
 
 # Alias for AuthorizationError (403 Forbidden)
 ForbiddenError = AuthorizationError
+
+
+class MLEngineNotAvailableError(AppError):
+    """
+    Raised when an ML Engine operation is requested but ML_ENGINE_ENABLED=False
+    or the ML Engine service is unreachable.
+    ML operations must never silently return fabricated/mock data.
+    """
+    def __init__(
+        self,
+        message: str = "ML Engine is not available. Set ML_ENGINE_ENABLED=true and configure ML_ENGINE_URL.",
+        details: dict = None,
+    ):
+        super().__init__(
+            code="ML_ENGINE_NOT_AVAILABLE",
+            message=message,
+            status_code=503,
+            details=details,
+        )

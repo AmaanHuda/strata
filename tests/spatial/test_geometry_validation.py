@@ -9,7 +9,8 @@ def test_validate_valid_2d_wkt():
     res = GeometryValidationService.validate_2d_wkt(wkt)
     assert res["is_valid"] is True
     assert res["geom_type"] == "Polygon"
-    assert res["approx_metric_area_sqm"] > 0
+    assert res["metric_area_sqm"] > 0
+    assert "area_method" in res
 
 
 def test_validate_invalid_wkt():

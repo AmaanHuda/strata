@@ -28,10 +28,24 @@ class ParcelRepository(BaseRepository[Parcel]):
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def find_within_bbox(self, min_lon: float, min_lat: float, max_lon: float, max_lat: float) -> List[Parcel]:
-        bbox_wkt = f"POLYGON(({min_lon} {min_lat},{max_lon} {min_lat},{max_lon} {max_lat},{min_lon} {max_lat},{min_lon} {min_lat}))"
-        stmt = select(Parcel).where(
-            ST_Intersects(Parcel.geometry_2d, ST_GeomFromText(bbox_wkt, 4326))
+    async def find_within_bbox(
+        self,
+        min_lon: float,
+        min_lat: float,
+        max_lon: float,
+        max_lat: float,
+        limit: int = None,
+    ) -> list:
+        from app.core.config import settings
+        effective_limit = min(limit or settings.MAX_PAGE_SIZE, settings.MAX_PAGE_SIZE)
+        bbox_wkt = (
+            f"POLYGON(({min_lon} {min_lat},{max_lon} {min_lat},"
+            f"{max_lon} {max_lat},{min_lon} {max_lat},{min_lon} {min_lat}))"
+        )
+        stmt = (
+            select(Parcel)
+            .where(ST_Intersects(Parcel.geometry_2d, ST_GeomFromText(bbox_wkt, 4326)))
+            .limit(effective_limit)
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())

@@ -1,9 +1,16 @@
 """
 Central settings for SIH 2026 PS26011 Backend.
 Loaded from environment variables and .env file.
+
+Canonical variable names (one name per setting):
+- SECRET_KEY          → JWT signing secret
+- ML_ENGINE_URL       → ML Engine base URL
+- ML_ENGINE_TIMEOUT   → ML Engine HTTP timeout (seconds)
+- ENVIRONMENT         → Runtime environment (development/production)
+- CORS_ORIGINS        → Comma-separated allowed CORS origins
 """
 from functools import lru_cache
-from typing import List, Optional
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,7 +26,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "3D-Mapping-Backend"
     APP_VERSION: str = "2.0.0"
     ENVIRONMENT: str = "development"
-    APP_ENV: str = "development"
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
 
@@ -28,26 +34,22 @@ class Settings(BaseSettings):
     SYNC_DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/ulpin_db"
 
     # JWT & Security
-    SECRET_KEY: str = "sih2026-production-super-secret-key-3d-cadastre-jwt-secret-key-replace-in-prod"
-    JWT_SECRET: str = "sih2026-production-super-secret-key-3d-cadastre-jwt-secret-key-replace-in-prod"
+    # Canonical JWT secret. MUST be overridden via SECRET_KEY env var in production.
+    SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    JWT_EXPIRATION: int = 3600
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     BCRYPT_ROUNDS: int = 12
     MAX_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_MINUTES: int = 15
 
-    # CORS
+    # CORS — canonical: CORS_ORIGINS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
-    # External ML Engine Contract
+    # External ML Engine Contract — canonical: ML_ENGINE_URL, ML_ENGINE_TIMEOUT
     ML_ENGINE_URL: str = "http://localhost:8001"
-    ML_ENGINE_BASE_URL: str = "http://localhost:8001"
     ML_ENGINE_API_KEY: str = ""
     ML_ENGINE_TIMEOUT: int = 120
-    ML_ENGINE_TIMEOUT_SECONDS: int = 120
     ML_ENGINE_VERSION: str = "v2.0"
     ML_ENGINE_ENABLED: bool = False
 
@@ -62,6 +64,7 @@ class Settings(BaseSettings):
 
     # Spatial References
     DEFAULT_CRS: str = "EPSG:4326"
+    # EPSG:7755 = GCS India 2014 — used for metric area/distance calculations
     INDIA_CRS: str = "EPSG:7755"
 
     # Pagination

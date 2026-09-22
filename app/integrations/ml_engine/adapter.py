@@ -52,9 +52,12 @@ class MLAdapter:
     async def generate_vertical_units_for_floor(
         self, floor_id: UUID, floor_number: int, floor_area_sqm: float
     ) -> VerticalUnitGenResponse:
-        """Invokes vertical unit generation algorithm."""
+        """Invokes vertical unit generation algorithm via ML Engine.
+
+        Raises MLEngineNotAvailableError if ML_ENGINE_ENABLED=False.
+        """
         req = VerticalUnitGenRequest(
-            building_id=str(floor_id),
+            floor_id=str(floor_id),   # corrected: was incorrectly passing floor_id as building_id
             floor_number=floor_number,
             floor_area_sqm=floor_area_sqm,
         )

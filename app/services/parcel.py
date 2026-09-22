@@ -1,10 +1,10 @@
-﻿"""Parcel business logic."""
+"""Parcel business logic."""
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import ConflictError, NotFoundError
 from app.db.repositories.parcel import ParcelRepository
 from app.db.models.property import Parcel
 from app.schemas.property import ParcelCreate
@@ -17,7 +17,7 @@ class ParcelService:
     async def create_parcel(self, data: ParcelCreate) -> Parcel:
         existing = await self.repo.get_by_parcel_number(data.parcel_number)
         if existing:
-            raise HTTPException(status_code=409, detail=f"Parcel {data.parcel_number} already exists")
+            raise ConflictError(f"Parcel {data.parcel_number} already exists")
         create_data = data.model_dump(exclude_none=True, by_alias=False)
         create_data.pop("geometry_wkt", None)  # handled separately
         return await self.repo.create(create_data)
@@ -25,7 +25,7 @@ class ParcelService:
     async def get_parcel(self, parcel_id: UUID) -> Parcel:
         p = await self.repo.get(parcel_id)
         if not p:
-            raise HTTPException(status_code=404, detail="Parcel not found")
+            raise NotFoundError(f"Parcel {parcel_id} not found")
         return p
 
     async def list_parcels(self, district: Optional[str] = None, offset: int = 0, limit: int = 20) -> List[Parcel]:
