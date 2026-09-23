@@ -169,10 +169,36 @@ class MockAsyncSession:
                     return MockQueryResult([self._store.entities[target_id]])
                 return MockQueryResult([])
             return MockQueryResult(bldgs)
+        if "from ulpin_records" in stmt_str:
+            from app.db.models.ulpin import ULPINRecord
+            records = [v for v in self._store.entities.values() if isinstance(v, ULPINRecord)]
+            target_val = None
+            if hasattr(statement, "compile"):
+                for val in statement.compile().params.values():
+                    if isinstance(val, str) and len(val) > 0:
+                        target_val = val
+                        break
+            if target_val:
+                matching = [
+                    r for r in records
+                    if getattr(r, "official_ulpin", None) == target_val
+                    or getattr(r, "candidate_ulpin", None) == target_val
+                ]
+                return MockQueryResult(matching)
+            return MockQueryResult(records)
+
         if "count(" in stmt_str:
             return MockQueryResult([len(self._store.entities)])
         return MockQueryResult([])
 
+
+    def begin_nested(self):
+        class MockNested:
+            async def __aenter__(self_nested):
+                return self_nested
+            async def __aexit__(self_nested, exc_type, exc_val, exc_tb):
+                pass
+        return MockNested()
 
     async def get(self, entity, ident):
         return self._store.get(entity, ident)
@@ -198,6 +224,7 @@ class MockAsyncSession:
 
     async def close(self):
         pass
+
 
 
 @pytest.fixture(autouse=True)

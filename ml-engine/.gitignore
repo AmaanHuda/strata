@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -46,3 +46,21 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .DS_Store
+
+# Raw Datasets & Model Weights (Not committed to Git)
+datasets/raw/*
+!datasets/raw/.gitkeep
+datasets/processed/*
+!datasets/processed/.gitkeep
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+models/registry/*
+!models/registry/.gitkeep
+reports/*
+!reports/.gitkeep
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+

@@ -10,6 +10,6 @@
   "license": "SpaceNet Dataset License — free for research and non-commercial use. Commercial use requires separate licensing. See: https://spacenet.ai/spacenet-dataset-license/",
   "provenance": "Available via AWS S3 (spacenet-dataset bucket) and Radiant MLHub. aws s3 ls s3://spacenet-dataset/SpaceNet7/",
   "status": "REAL",
-  "limitations": "Labels are building footprints only — no height, floor, or unit data. Indian-subcontinent AOIs may not cover target districts. Labels are derived from imagery interpretation, not official cadastral records. NOT authoritative for Indian land records. Suitable as benchmark/pre-training only.",
-  "intended_use": "Task 1 (building extraction — pre-training / benchmark), Task 8 (change detection — multi-temporal training)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Foreign commercial imagery dataset. Prohibited from active training or inference under data.gov.in rule.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Authorized datasets must originate from data.gov.in or official state/UT portals."
 }

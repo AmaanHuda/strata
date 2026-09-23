@@ -1,7 +1,11 @@
-﻿# Dataset Strategy — SIH 2026 PS 26011
+# Dataset Strategy — SIH 2026 PS 26011
 # Phase 1: Dataset Foundation
 
----
+> [!IMPORTANT]
+> **AUTHORITATIVE DATASET RULE (SIH 2026 PS 26011):**
+> Datasets MUST originate exclusively from `data.gov.in` or official state/UT `*.data.gov.in` portals.
+> All benchmark datasets mentioned in this historical strategy document (SpaceNet, INRIA, WHU, NASA, Copernicus, OSM) represent pre-clearance research references and are explicitly **NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE**.
+
 
 ## 1. Task-to-Dataset Mapping
 

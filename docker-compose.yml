@@ -4,15 +4,15 @@ services:
   db:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: ulpin_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ulpin_db}
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -53,11 +53,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/ulpin_db
-      - ENVIRONMENT=development
-      - JWT_SECRET=sih2026-production-super-secret-key-3d-cadastre-jwt-secret-key-replace-in-prod
-      - ML_ENGINE_URL=http://ml-engine:8001
-      - ML_ENGINE_ENABLED=False
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@db:5432/${POSTGRES_DB:-ulpin_db}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SECRET_KEY=${SECRET_KEY:-sih2026-production-super-secret-key-3d-cadastre-jwt-secret-key-replace-in-prod}
+      - ML_ENGINE_URL=${ML_ENGINE_URL:-http://ml-engine:8001}
+      - ML_ENGINE_ENABLED=${ML_ENGINE_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -68,14 +68,17 @@ services:
     build: .
     command: python -m app.workers.worker
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:password@db:5432/ulpin_db
-      - ENVIRONMENT=development
-      - ML_ENGINE_URL=http://ml-engine:8001
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres_password}@db:5432/${POSTGRES_DB:-ulpin_db}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - SECRET_KEY=${SECRET_KEY:-sih2026-production-super-secret-key-3d-cadastre-jwt-secret-key-replace-in-prod}
+      - ML_ENGINE_URL=${ML_ENGINE_URL:-http://ml-engine:8001}
+      - ML_ENGINE_ENABLED=${ML_ENGINE_ENABLED:-false}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+
 
 volumes:
   pgdata:

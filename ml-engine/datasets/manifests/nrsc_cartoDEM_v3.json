@@ -10,6 +10,6 @@
   "license": "NRSC data policy. Free for research; registration required at Bhuvan portal.",
   "provenance": "Available via Bhuvan Geoportal DEM downloads section after user registration.",
   "status": "REAL",
-  "limitations": "30m resolution insufficient for individual building height estimation. Useful for terrain correction (DTM baseline) and coarse building height context. Urban areas may have significant vertical error due to building interference. For building-scale height, LiDAR or photogrammetric DSM required.",
-  "intended_use": "Task 3 (terrain baseline / DTM for nDSM calculation), Task 2 (point cloud ground reference)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. 30m resolution insufficient for individual building height estimation. Not hosted on open data.gov.in portal.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Authorized datasets must originate from data.gov.in or official state/UT portals."
 }

@@ -10,6 +10,6 @@
   "license": "Copernicus DEM — free for any use including commercial. Attribution required. See: https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model",
   "provenance": "Freely downloadable from AWS Open Data Registry (no registration required). Also available via OpenTopography.",
   "status": "REAL",
-  "limitations": "30m resolution insufficient for individual building height. DSM includes canopy and building surfaces — not bare-earth. Urban canyon and bridge artefacts possible. Vertical accuracy approx 4m RMSE globally. Use as coarse terrain reference only — not as ground truth for building heights.",
-  "intended_use": "Task 3 (coarse terrain context for height estimation fallback), Task 2 (DEM processing pipeline testing)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Foreign non-data.gov.in source. 30m resolution insufficient for individual building height. DSM includes canopy and building surfaces.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Authorized datasets must originate from data.gov.in or official state/UT portals."
 }

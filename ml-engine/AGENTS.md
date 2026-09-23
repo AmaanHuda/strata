@@ -1,4 +1,4 @@
-﻿# AGENTS.md — SIH 2026 | PS 26011 | ML + Dataset + AI Engine
+# AGENTS.md — SIH 2026 | PS 26011 | ML + Dataset + AI Engine
 # Persistent operating rules. Future tasks MUST follow this file.
 # Last updated: 2026-09-12
 
@@ -44,19 +44,16 @@ Backend and frontend are other teams' responsibility.
 
 ## 3. DATASET POLICY
 
-Priority order:
-1. Official Indian / government sources
-2. Reputable research / benchmark datasets
-3. Kaggle only when original source, provenance, and license are known
+AUTHORITATIVE REQUIREMENT:
+Datasets must originate exclusively from data.gov.in or official state/UT *.data.gov.in portals.
+Third-party portals (Kaggle, SpaceNet, INRIA, NASA, OSM, synthetic/scraped sources) are PROHIBITED from active training, validation, or production inference, and remain purely historical metadata references where recorded.
 
-Legitimate sources:
-- Department of Land Resources / DILRMP
-- ULPIN-related official sources
-- Survey of India
-- ISRO / NRSC / Bhuvan
-- data.gov.in
-- Official state GIS / municipal GIS
-- Legitimate research datasets
+Legitimate Authoritative Sources:
+- data.gov.in (Open Government Data Platform India)
+- Official State/UT data.gov.in Subdomains (*.data.gov.in)
+- Department of Land Resources (DoLR) / DILRMP / ULPIN-related official portals
+- Survey of India / Official State GIS Land Record portals
+
 
 NEVER:
 - Fabricate datasets, labels, metrics, government data, or legal requirements

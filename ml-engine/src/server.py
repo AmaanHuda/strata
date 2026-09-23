@@ -74,7 +74,7 @@ def health():
         "status": "ok",
         "version": "1.0.0",
         "device": "cpu",
-        "models_loaded": [
+        "components_available": [
             "footprint_segmenter",
             "height_estimator",
             "floor_detector",
@@ -82,7 +82,11 @@ def health():
             "evidence_fusion",
             "cadastral_validator",
             "confidence_calibrator"
-        ]
+        ],
+        "trained_models_loaded": False,
+        "models_loaded": [],
+        "datasets_available": False,
+        "inference_ready": "baseline_only"
     }
 
 
@@ -111,39 +115,70 @@ def process_parcel(req: ProcessParcelRequest):
 
 @app.post("/predict/height")
 def predict_height(req: HeightPredictRequest):
-    res = height_estimator.estimate_from_floor_count(floor_count=3)
+    # Baseline analytical estimation - does not claim trained deep learning inference
+    if req.footprint_wkt:
+        return {
+            "status": "ok",
+            "estimated_height_m": 9.0,
+            "confidence_score": 0.50,
+            "uncertainty_range_m": 3.0,
+            "floor_count_estimate": 3,
+            "method": "heuristic_baseline",
+            "model_version": "0.1.0_baseline"
+        }
     return {
         "status": "ok",
-        "estimated_height_m": res.get("height_m", 9.0),
-        "confidence_score": 0.75,
-        "uncertainty_range_m": 0.5,
-        "floor_count_estimate": 3,
-        "method": "heuristic_baseline",
-        "model_version": "0.1.0"
+        "estimated_height_m": 0.0,
+        "confidence_score": 0.0,
+        "uncertainty_range_m": 0.0,
+        "floor_count_estimate": 0,
+        "method": "DATA_NOT_AVAILABLE",
+        "model_version": "0.1.0_baseline"
     }
 
 
 @app.post("/predict/floors")
 def predict_floors(req: FloorsPredictRequest):
+    if req.height_m <= 0:
+        return {
+            "status": "ok",
+            "floor_count": 0,
+            "floor_count_above_ground": 0,
+            "floor_count_below_ground": 0,
+            "estimated_ceiling_height_m": 0.0,
+            "confidence": 0.0,
+            "method": "DATA_NOT_AVAILABLE"
+        }
     res = floor_detector.detect_from_height(req.height_m)
-    fc = res.get("floor_count", max(1, int(req.height_m / 3.0)))
+    fc = res.get("floor_count") or max(1, int(req.height_m / 3.0))
+    ceiling_h = round(req.height_m / fc, 2) if fc > 0 else 3.0
     return {
         "status": "ok",
         "floor_count": fc,
         "floor_count_above_ground": fc,
         "floor_count_below_ground": 0,
-        "estimated_ceiling_height_m": req.height_m / fc if fc > 0 else 3.0,
-        "confidence": 0.80,
-        "method": "height_division"
+        "estimated_ceiling_height_m": ceiling_h,
+        "confidence": res.get("confidence", 0.70),
+        "method": "height_division_baseline"
     }
 
 
 @app.post("/generate/vertical-units")
 def generate_vertical_units(req: VerticalUnitsRequest):
-    res = unit_segmenter.segment_floor(floor_area_sqm=req.floor_area_sqm)
-    units = res.get("units", [])
+    target_units = req.target_units_per_floor or max(1, int(req.floor_area_sqm / 100.0) if req.floor_area_sqm > 0 else 1)
+    units = []
+    unit_area = round(req.floor_area_sqm / target_units, 2) if req.floor_area_sqm > 0 else 0.0
+    for u in range(1, target_units + 1):
+        units.append({
+            "unit_number": f"U-{u:02d}",
+            "unit_type": req.building_type or "residential",
+            "area_sqm": unit_area,
+            "volume_cum": None,
+            "confidence": 0.50
+        })
     return {
         "status": "ok",
         "floor_number": req.floor_number,
         "units": units
     }
+

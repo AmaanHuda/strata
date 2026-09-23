@@ -1,4 +1,4 @@
-﻿# ML Engine Specification
+# ML Engine Specification
 # SIH 2026 — PS 26011: 3D Cadastral Mapping and ULPIN / 3D Property Identity
 # Last updated: 2026-09-12
 
@@ -119,20 +119,17 @@ ml-engine/
 
 ## 4. Dataset Policy
 
-### 4.1 Priority
-1. Official Indian / government sources
-2. Reputable research / benchmark datasets
-3. Kaggle only when original source, provenance, and license are verified
+### 4.1 Authoritative Mandate
+Authoritative datasets MUST originate exclusively from `data.gov.in` or official state/UT `*.data.gov.in` portals.
+Foreign, commercial, Kaggle, SpaceNet, INRIA, NASA, or crowd-sourced (OSM) datasets are PROHIBITED for active training/inference and are maintained strictly as historical metadata references.
 
 ### 4.2 Legitimate Sources
-| Category | Sources |
-|---|---|
-| Land records | DILRMP, ULPIN official, state land record portals |
-| Topographic | Survey of India (SOI) |
-| Satellite / Remote sensing | ISRO, NRSC, Bhuvan, Cartosat-2/3 |
-| Open government data | data.gov.in, state GIS portals |
-| Building / urban | Municipal GIS, smart city data |
-| Benchmark | SpaceNet, INRIA Aerial, WHU Building, OpenAerialMap |
+| Category | Sources | Policy Status |
+|---|---|---|
+| Open Government Data | data.gov.in, official state/UT *.data.gov.in portals | AUTHORITATIVE / PERMITTED |
+| Cadastral Land records | DILRMP (DoLR / data.gov.in), authorized state portals | AUTHORITATIVE / PERMITTED |
+| Historical Reference | SpaceNet, INRIA, WHU, NASA, Copernicus, OSM | HISTORICAL METADATA ONLY (Not for training/inference) |
+
 
 ### 4.3 Dataset Manifest Schema
 Every dataset file must have a corresponding manifest in `datasets/manifests/`:

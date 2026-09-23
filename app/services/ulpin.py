@@ -211,6 +211,9 @@ class ULPINService:
         status_result = ULPINStatus.INVALID
         matched_entity_id = None
         matched_entity_type = None
+        is_officially_verified = False
+        official_ulpin_val: Optional[str] = None
+        candidate_property_id: Optional[str] = None
 
         if record:
             checks["registry_matched"] = True
@@ -224,22 +227,29 @@ class ULPINService:
             else:
                 checks["entity_linkage_valid"] = True
 
-            # If it's official and registered -> OFFICIAL / AUTHORITATIVE
-            if record.official_ulpin == clean_ulpin:
+            # If it's official and authoritative -> OFFICIAL
+            if record.official_ulpin == clean_ulpin and record.is_authoritative:
                 status_result = ULPINStatus.OFFICIAL
+                is_officially_verified = True
+                official_ulpin_val = clean_ulpin
+                candidate_property_id = record.candidate_ulpin
             elif record.status == ULPINStatus.VALIDATED:
                 status_result = ULPINStatus.VALIDATED
+                candidate_property_id = record.candidate_ulpin
             else:
                 # If format is valid and linkage holds, mark as VALIDATED candidate
                 status_result = ULPINStatus.VALIDATED if checks["entity_linkage_valid"] else ULPINStatus.CANDIDATE
+                candidate_property_id = record.candidate_ulpin
         else:
             # Not in registry
             if is_official:
                 status_result = ULPINStatus.EXTERNAL_REFERENCE
-                checks["notes"] = "Valid official format, but not yet linked in local cadastral registry."
+                checks["notes"] = "Valid official format, but not yet verified or linked in local cadastral registry."
+                candidate_property_id = clean_ulpin
             elif is_candidate:
                 status_result = ULPINStatus.CANDIDATE
                 checks["notes"] = "Syntactically valid candidate identifier, unregistered."
+                candidate_property_id = clean_ulpin
             else:
                 status_result = ULPINStatus.INVALID
                 checks["errors"] = ["Identifier does not match official 14-char or candidate ULPIN syntax."]
@@ -253,10 +263,15 @@ class ULPINService:
             ulpin=clean_ulpin,
             is_valid_format=is_valid_format,
             status=status_result,
-            is_official=(status_result == ULPINStatus.OFFICIAL or is_official),
+            is_official=is_officially_verified,
+            candidate_property_id=candidate_property_id,
+            official_ulpin=official_ulpin_val,
+            ulpin_format_valid=is_valid_format,
+            ulpin_officially_verified=is_officially_verified,
             entity_type=matched_entity_type or entity_type,
             entity_id=matched_entity_id or entity_id,
             matched_in_registry=checks["registry_matched"],
             validation_checks=checks,
             legal_disclaimer=disclaimer,
         )
+

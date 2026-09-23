@@ -10,6 +10,6 @@
   "license": "Creative Commons Attribution 4.0 International (CC BY 4.0). Free for research including commercial.",
   "provenance": "Direct download from INRIA project page. No registration required.",
   "status": "REAL",
-  "limitations": "NOT Indian data. NOT cadastral. Western European and US urban morphology differs significantly from Indian cities (denser fabric, different roof types, mixed-use). Use for pre-training only — do not use as Indian building extraction ground truth. Must validate domain gap before deployment.",
-  "intended_use": "Task 1 (building extraction — pre-training benchmark; domain gap must be assessed)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Foreign non-data.gov.in data. NOT cadastral. Morphologically distinct from Indian urban fabric. Prohibited from active pipeline use under data.gov.in rule.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Authorized datasets must originate from data.gov.in or official state/UT portals."
 }

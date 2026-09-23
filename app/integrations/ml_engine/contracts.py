@@ -13,7 +13,11 @@ class MLHealthResponse(BaseModel):
     status: str = "ok"
     version: str = "2.0.0"
     device: str = "cpu"
+    components_available: List[str] = Field(default_factory=list)
+    trained_models_loaded: bool = False
     models_loaded: List[str] = Field(default_factory=list)
+    datasets_available: bool = False
+    inference_ready: str = "baseline_only"
 
 
 # 1. Building Extraction

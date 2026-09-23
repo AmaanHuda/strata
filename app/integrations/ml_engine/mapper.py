@@ -122,8 +122,18 @@ class MLDataMapper:
         # 3. Unit Entity Data (if unit_id specified)
         units_data: List[Dict[str, Any]] = []
         if output.unit_id:
+            target_floor_num = 0
+            if output.floor_id:
+                import re
+                match = re.search(r"\d+", output.floor_id)
+                if match:
+                    val = int(match.group(0))
+                    target_floor_num = val - 1 if val >= 1 else 0
+
             unit_dict = {
                 "unit_number": output.unit_id,
+                "floor_number": target_floor_num,
+                "floor_label": output.floor_id,
                 "unit_type": "residential",
                 "area_sqm": None,
                 "volume_cum": None,
@@ -136,11 +146,13 @@ class MLDataMapper:
                 "metadata_": {
                     "provenance_id": output.provenance_id,
                     "volume_id": output.volume_id,
+                    "floor_id": output.floor_id,
                 },
             }
             units_data.append(unit_dict)
 
         return building_data, floors_data, units_data
+
 
     @staticmethod
     def building_from_ml(

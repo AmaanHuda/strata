@@ -10,6 +10,6 @@
   "license": "Free for research use with attribution. Commercial use requires permission from WHU.",
   "provenance": "Direct download from WHU GPCV Lab. Dataset paper: Ji et al., 2018.",
   "status": "REAL",
-  "limitations": "NOT Indian data. NOT cadastral. New Zealand and global morphology differs from Indian cities. Use for pre-training only. Domain adaptation required before use on Indian imagery.",
-  "intended_use": "Task 1 (building extraction — pre-training; domain gap must be assessed and documented)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Foreign non-data.gov.in data. Prohibited from active training or inference under data.gov.in rule.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Authorized datasets must originate from data.gov.in or official state/UT portals."
 }

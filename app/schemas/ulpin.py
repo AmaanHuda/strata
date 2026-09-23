@@ -51,9 +51,14 @@ class ULPINValidateResponse(BaseModel):
     ulpin: str
     is_valid_format: bool
     status: str  # CANDIDATE, VALIDATED, OFFICIAL, EXTERNAL_REFERENCE, INVALID
-    is_official: bool
+    is_official: bool  # True ONLY if verified official government record, NOT merely format valid
+    candidate_property_id: Optional[str] = None
+    official_ulpin: Optional[str] = None
+    ulpin_format_valid: bool = False
+    ulpin_officially_verified: bool = False
     entity_type: Optional[str] = None
     entity_id: Optional[UUID] = None
     matched_in_registry: bool
     validation_checks: Dict[str, Any]
     legal_disclaimer: str
+

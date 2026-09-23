@@ -12,6 +12,7 @@ Executes the strict ingestion workflow:
 9. Commit & Return Standardized Summary
 """
 import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 from uuid import UUID
@@ -61,9 +62,11 @@ class MLIngestionService:
         GeometryValidationService.validate_crs(payload.source_crs)
         GeometryValidationService.validate_crs(payload.processing_crs)
 
-        # 3. Idempotency check
-        raw_hash_str = f"{payload.parcel_number}:{payload.model_name}:{payload.model_version}:{len(payload.buildings)}"
-        input_hash = hashlib.sha256(raw_hash_str.encode()).hexdigest()
+        # 3. Canonical input hash for lineage and idempotency
+        payload_dict = payload.model_dump(exclude={"idempotency_key", "job_id"})
+        canonical_json = json.dumps(payload_dict, sort_keys=True, default=str)
+        input_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
 
         if payload.idempotency_key:
             existing_job = await self.db.execute(

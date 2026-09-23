@@ -10,6 +10,6 @@
   "license": "Public domain (US government work). Freely downloadable.",
   "provenance": "NASA EarthExplorer or USGS Earth Resources Observation and Science (EROS) Center. No registration required for download.",
   "status": "REAL",
-  "limitations": "2000 vintage — does not reflect post-2000 construction. 30m resolution insufficient for building-level analysis. Radar voids in steep terrain and water bodies. Layover artefacts in dense urban areas. Significant age limitation for change detection use. Use for terrain baseline only.",
-  "intended_use": "Task 3 (terrain baseline / fallback DEM), Task 2 (pipeline compatibility testing)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. 2000 vintage — does not reflect modern construction. 30m resolution insufficient for building-level analysis. Prohibited from production under data.gov.in rule.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Production datasets must come from data.gov.in or official state/UT portals."
 }

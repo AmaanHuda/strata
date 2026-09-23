@@ -105,17 +105,27 @@ class MLAdapter:
 
         await self.db.flush()
 
-        # 6. Persist Units
+        # 6. Persist Units with explicit floor mapping
         created_units: List[Unit] = []
         if created_floors and units_dict_list:
-            first_floor = created_floors[0]
+            floor_by_number = {flr.floor_number: flr for flr in created_floors}
+            floor_by_label = {flr.floor_label: flr for flr in created_floors}
+
             for u_data in units_dict_list:
-                unit = Unit(floor_id=first_floor.id, **u_data)
+                target_floor_num = u_data.pop("floor_number", 0)
+                target_floor_label = u_data.pop("floor_label", None)
+                target_flr = (
+                    floor_by_label.get(target_floor_label)
+                    or floor_by_number.get(target_floor_num)
+                    or created_floors[0]
+                )
+                unit = Unit(floor_id=target_flr.id, **u_data)
                 self.db.add(unit)
                 created_units.append(unit)
 
         await self.db.commit()
         await self.db.refresh(building)
+
 
         return {
             "success": True,

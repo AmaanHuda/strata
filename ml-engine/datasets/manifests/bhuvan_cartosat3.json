@@ -10,6 +10,6 @@
   "license": "National Remote Sensing Centre (NRSC) data policy. Non-commercial research use subject to NRSC approval and data sharing agreement.",
   "provenance": "Requested through Bhuvan Geoportal or NRSC Data Dissemination Policy portal. User registration required.",
   "status": "REAL",
-  "limitations": "Access requires NRSC/ISRO registration and project justification. High-resolution data (sub-1m) may require additional clearance. Cloud cover varies by season. No building-level labels included.",
-  "intended_use": "Task 1 (building extraction imagery source), Task 3 (height estimation visual context), Task 8 (change detection — multi-temporal)"
+  "limitations": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Access requires NRSC/ISRO clearance and registration. Not hosted directly on open data.gov.in portal. Cloud cover varies by season. No building-level labels included.",
+  "intended_use": "HISTORICAL METADATA ONLY — NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE. Production datasets must come from data.gov.in or official state/UT portals."
 }

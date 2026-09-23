@@ -5,12 +5,17 @@
 
 ---
 
+> [!IMPORTANT]
+> **AUTHORITATIVE DATASET REQUIREMENT (SIH 2026 PS 26011):**
+> Active datasets must originate exclusively from `data.gov.in` or official state/UT `*.data.gov.in` portals. All external benchmark datasets mentioned below are historical research references and are **NOT USED FOR TRAINING/VALIDATION/PRODUCTION INFERENCE**.
+
 ## 1. Executive Summary & Policy
 
 In accordance with SIH 2026 data integrity rules:
-1. **Never fabricate ground truth:** Global benchmark datasets (SpaceNet, INRIA, WHU) provide algorithmic pre-training and verification baseline metrics, but are NEVER represented as authoritative Indian cadastral ground truth.
+1. **Never fabricate ground truth:** Global benchmark datasets (SpaceNet, INRIA, WHU) are NOT used for training or production inference.
 2. **Authoritative Indian Cadastral Data:** Publicly available Indian satellite imagery (Bhuvan Cartosat-3) and coarse elevation (CartoDEM v3, Copernicus GLO-30) do not come with building-level polygon annotations, building-scale LiDAR point clouds, or internal strata floor plans.
 3. **Transparent Classification:** Every ML task is classified into: `REAL_DATA`, `DERIVED`, `SYNTHETIC`, `INFERRED`, or `DATA_LIMITED`.
+
 
 ---
 
