@@ -1,0 +1,31 @@
+{
+  "model_name": "building_extraction_unet",
+  "architecture": "UNet",
+  "in_channels": 3,
+  "out_channels": 1,
+  "base_channels": 12,
+  "tile_size": 256,
+  "batch_size": 12,
+  "epochs": 10,
+  "learning_rate": 0.001,
+  "seed": 1337,
+  "val_fraction": 0.15,
+  "test_fraction": 0.15,
+  "bce_weight": 0.5,
+  "dice_weight": 0.5,
+  "threshold": 0.5,
+  "early_stopping_patience": 4,
+  "dataset_manifest_required": true,
+  "mask_color": [
+    0,
+    110,
+    255
+  ],
+  "mask_tolerance": 0,
+  "random_crop": true,
+  "split_strategy": "contiguous",
+  "secondary_stratified_eval": true,
+  "images_subdir": "Images",
+  "masks_subdir": "Masks",
+  "notes": "Right-sized CPU retrain of building_extraction_svamitva.json after run 1 measured 13 min/epoch (stopped; no checkpoint was produced by run 1). base_channels 32->12 (approx 9x fewer MACs), batch 8->12, epochs 15->10, patience 8->4. All data rules unchanged: mask_color (0,110,255), contiguous split, random_crop at native 1024, blank-tile exclusion, secondary stratified eval."
+}

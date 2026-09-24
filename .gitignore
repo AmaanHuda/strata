@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 .env
 .venv/
+# Portable PostGIS used for local persistence verification (Phase 6).
+# Never committed: it is a ~1 GB unpacked database engine, not project source.
+.pg_portable/
 venv/
 *.egg-info/
 dist/

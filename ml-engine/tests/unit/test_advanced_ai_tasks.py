@@ -7,8 +7,8 @@ import numpy as np
 from src.change_detection.detector import MultiTemporalChangeDetector
 from src.reconstruction.exporters import export_to_cityjson, export_to_wavefront_obj, export_to_geojson_polygonz
 from src.units.partitioner import StrataUnitPartitioner
-from src.building_extraction.dl_models import UNetFootprintModel
-from src.height.dl_height import DeepHeightEstimator
+from src.building_extraction.dl_models import HeuristicFootprintSegmenter
+from src.height.dl_height import HeuristicHeightEstimator
 
 
 class TestChangeDetection:
@@ -75,18 +75,50 @@ class TestStrataUnitPartitioner:
         assert units[1]["unit_id"] == "UNIT-0202"
 
 
-class TestDeepLearningWrappers:
-    def test_unet_segmentation(self):
-        model = UNetFootprintModel()
+class TestHeuristicBaselines:
+    """These classes are deterministic heuristics, not trained models.
+
+    The assertions below were strengthened, not weakened: they now prove the
+    baselines self-identify as untrained and never invent a measurement. The
+    real trainable architecture is covered in test_torch_unet.py.
+    """
+
+    def test_heuristic_segmenter_identifies_itself_as_untrained(self):
+        model = HeuristicFootprintSegmenter()
         chip = np.ones((128, 128, 3), dtype=np.uint8) * 180
         res = model.segment(chip)
         assert res["binary_mask"].shape == (128, 128)
         assert "probability_map" in res
-        assert res["model_version"] == "1.0.0-unet-cartosat"
+        assert res["is_trained_model"] is False
+        assert res["model_version"] == "heuristic-baseline-1.0.0"
+        assert res["method"] == "heuristic_intensity_response"
 
-    def test_deep_height_estimator(self):
-        model = DeepHeightEstimator()
+    def test_heuristic_segmenter_is_deterministic(self):
+        model = HeuristicFootprintSegmenter()
+        chip = (np.arange(64 * 64 * 3).reshape(64, 64, 3) % 255).astype(np.uint8)
+        assert np.array_equal(model.predict_probability_map(chip), model.predict_probability_map(chip))
+
+    def test_height_heuristic_does_not_fabricate_a_height(self):
+        """A flat chip carries no height signal, so no height may be returned.
+
+        This previously returned an invented 9.0 m at confidence 0.50.
+        """
+        model = HeuristicHeightEstimator()
         chip = np.ones((64, 64, 3), dtype=np.uint8) * 150
         res = model.estimate_building_height(chip)
+        assert res["estimated_height_m"] is None
+        assert res["confidence"] == 0.0
+        assert res["method"] == "NO_SIGNAL"
+        assert res["is_trained_model"] is False
+
+    def test_height_heuristic_reports_a_value_only_with_signal(self):
+        # The heuristic keys off per-pixel CHANNEL contrast, so a flat-coloured
+        # patch genuinely carries no signal. Random colour noise does.
+        model = HeuristicHeightEstimator()
+        chip = np.zeros((64, 64, 3), dtype=np.uint8)
+        rng = np.random.RandomState(0)
+        chip[10:30, 10:30, :] = rng.randint(0, 256, size=(20, 20, 3)).astype(np.uint8)
+        res = model.estimate_building_height(chip)
+        assert res["estimated_height_m"] is not None
         assert res["estimated_height_m"] > 0.0
-        assert res["confidence"] > 0.0
+        assert res["data_status"] == "INFERRED"

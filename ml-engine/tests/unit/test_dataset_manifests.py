@@ -36,6 +36,9 @@ EXPECTED_MANIFESTS = [
     "whu_building_dataset.json",
     "osm_india_buildings.json",
     "dilrmp_cadastral.json",
+    # Approved last-resort training source (see AGENTS.md section 3 amendment).
+    # Included here so its provenance claims are schema-validated like any other.
+    "svamitva_drone_kaggle.json",
 ]
 
 

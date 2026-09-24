@@ -25,7 +25,12 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False, index=True)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=True)
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.VIEWER)
+    # values_callable: SQLAlchemy defaults to binding Enum MEMBER NAMES ('ADMIN'),
+    # but every API schema, auth flow and the migration use the lowercase VALUES
+    # ('admin'). Without this, any real-Postgres INSERT fails with
+    # "invalid input value for enum userrole: \"ADMIN\"" — mocked tests never
+    # exercise the bind, so the bug was invisible until Phase 6 verification.
+    role = Column(Enum(UserRole, values_callable=lambda e: [m.value for m in e]), nullable=False, default=UserRole.VIEWER)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     failed_login_attempts = Column(Integer, default=0, nullable=False)

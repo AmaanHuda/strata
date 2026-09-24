@@ -1,0 +1,39 @@
+# Training-only dependencies for the ML Engine.
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The serving image (Dockerfile) deliberately excludes torch: it adds ~2 GB and
+# baseline inference does not need it. Training DOES need it, so training
+# dependencies are kept separate rather than weakening the serving image.
+#
+# SETUP (project-local virtualenv, recommended)
+# ---------------------------------------------
+#   python -m venv .venv
+#   ./.venv/Scripts/python.exe -m pip install -r ml-engine/requirements-train.txt
+#
+# The torch CPU wheel comes from PyTorch's own index, not PyPI, so the index URL
+# must be supplied explicitly:
+#
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+# For CUDA builds swap the index URL for the matching CUDA wheel index
+# (https://download.pytorch.org/whl/cu121 etc.). CUDA availability is reported
+# honestly by the training script; it never assumes a GPU.
+#
+# VERIFY
+# ------
+#   ./.venv/Scripts/python.exe -c "import torch; print(torch.__version__)"
+#   ./.venv/Scripts/python.exe -m pytest ml-engine/tests -q
+#
+# NOTE: torch is intentionally NOT pinned to an exact version here because the
+# correct wheel depends on the local Python and CUDA combination.
+
+# Core inference/training numerics
+numpy>=1.24
+pillow>=9.0
+
+# Test runner for the torch-gated tests (the rest of the suite runs without torch)
+pytest>=7.0
+
+# Install separately, CPU index:
+#   torch>=2.0  (see command above)

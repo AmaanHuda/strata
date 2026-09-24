@@ -29,7 +29,11 @@ def upgrade() -> None:
         sa.Column('username', sa.String(100), unique=True, nullable=False),
         sa.Column('hashed_password', sa.String(255), nullable=False),
         sa.Column('full_name', sa.String(255), nullable=True),
-        sa.Column('role', sa.String(50), nullable=False, default='viewer'),
+        # NOTE: must match app.db.models.user.User.role, which is a native PG
+        # ENUM (userrole) via sqlalchemy.Enum(UserRole). A String(50) here made
+        # every INSERT fail with 'type "userrole" does not exist' once the
+        # backend ran against a real Postgres (mocked tests never caught it).
+        sa.Column('role', postgresql.ENUM('admin', 'surveyor', 'analyst', 'viewer', name='userrole'), nullable=False),
         sa.Column('is_active', sa.Boolean(), nullable=False, default=True),
         sa.Column('is_verified', sa.Boolean(), nullable=False, default=False),
         sa.Column('failed_login_attempts', sa.Integer(), nullable=False, default=0),

@@ -1,4 +1,5 @@
 """Parcel business logic."""
+from geoalchemy2.elements import WKTElement
 from typing import List, Optional
 from uuid import UUID
 
@@ -20,6 +21,12 @@ class ParcelService:
             raise ConflictError(f"Parcel {data.parcel_number} already exists")
         create_data = data.model_dump(exclude_none=True, by_alias=False)
         create_data.pop("geometry_wkt", None)  # handled separately
+        # Populate the real PostGIS geometry column from the supplied WKT.
+        # Without this, geometry_2d stays NULL forever and every spatial-search
+        # endpoint silently returns nothing (invisible to mocked tests).
+        boundary_wkt = create_data.get("boundary_wkt")
+        if boundary_wkt and not create_data.get("geometry_2d"):
+            create_data["geometry_2d"] = WKTElement(boundary_wkt, srid=4326)
         return await self.repo.create(create_data)
 
     async def get_parcel(self, parcel_id: UUID) -> Parcel:

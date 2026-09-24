@@ -25,10 +25,9 @@ import datetime
 import numpy as np
 
 from src.building_extraction.model import BaselineFootprintSegmenter
-from src.building_extraction.dl_models import UNetFootprintModel
+from src.building_extraction.dl_models import HeuristicFootprintSegmenter
 from src.building_extraction.metrics import calculate_precision_recall_f1, calculate_iou, calculate_dice
 from src.height.estimator import BuildingHeightEstimator
-from src.height.dl_height import DeepHeightEstimator
 from src.height.metrics import calculate_height_metrics, DATA_LIMITED, DERIVED_HEIGHT
 from src.change_detection.detector import MultiTemporalChangeDetector
 from src.reconstruction.exporters import export_to_cityjson, export_to_wavefront_obj
@@ -59,20 +58,27 @@ def run_all_benchmarks():
     sim_img[50:120, 60:130] = 220
     sim_img[150:210, 140:200] = 200
 
-    unet = UNetFootprintModel()
-    unet_res = unet.segment(sim_img)
+    # Honest naming: this is the deterministic intensity-response heuristic,
+    # NOT a trained model. See src/building_extraction/torch_unet.py for the
+    # trainable U-Net.
+    segmenter = HeuristicFootprintSegmenter()
+    unet_res = segmenter.segment(sim_img)
     seg_metrics = calculate_precision_recall_f1(unet_res["binary_mask"], gt_mask)
     dice = calculate_dice(unet_res["binary_mask"], gt_mask)
 
     results["tasks"]["task_1_footprint_extraction"] = {
         "benchmark_tier": "SYNTHETIC_VALIDATION",
-        "model": "UNet-Cartosat-v1",
+        "model": "HeuristicFootprintSegmenter-v1 (intensity-threshold baseline; NOT a trained model)",
         "precision": seg_metrics["precision"],
         "recall": seg_metrics["recall"],
         "f1_score": seg_metrics["f1"],
         "iou": seg_metrics["iou"],
         "dice": round(dice, 4),
-        "real_world_data_limitation": "Pan-India authoritative annotated footprints absent in public domain; pre-trained on SpaceNet7/INRIA/WHU.",
+        "real_world_data_limitation": (
+            "No trained weights are loaded for this benchmark. Pan-India authoritative "
+            "annotated building footprints are absent from government-open sources; "
+            "the scores above are synthetic-tier algorithmic validation only."
+        ),
         "status": "PASS" if seg_metrics["iou"] >= 0.70 else "WARNING"
     }
     print(f"      Tier: [SYNTHETIC_VALIDATION] | IoU: {seg_metrics['iou']} | F1: {seg_metrics['f1']} | Dice: {dice:.4f}")

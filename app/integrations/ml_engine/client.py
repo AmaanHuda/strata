@@ -5,6 +5,15 @@ MLEngineNotAvailableError. They must NEVER return fabricated/mock predictions.
 Fake height, floor count, confidence or unit values must not be stored in the
 cadastral database as if they were real ML outputs.
 
+Strictness rules enforced here:
+  * estimate_height / estimate_floors / generate_vertical_units raise
+    MLEngineNotAvailableError on ANY failure. They do NOT fall back to assumed
+    or locally invented values.
+  * process_parcel additionally accepts an in-process call into the ML Engine
+    package. That path runs the analytical/geometric BASELINE pipeline and is
+    validated against MLOutputContractV1 - it is NOT a trained model, and its
+    output is tagged accordingly (data_status INFERRED/DERIVED).
+
 Future integration: set ML_ENGINE_ENABLED=true and ML_ENGINE_URL in .env.
 """
 import json
@@ -161,23 +170,17 @@ class MLEngineClient:
                 )
                 res.raise_for_status()
                 return HeightEstimationResponse(**res.json())
-        except Exception:
-            # Try in-process fallback
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
-            if ml_dir.exists() and str(ml_dir) not in sys.path:
-                sys.path.insert(0, str(ml_dir))
-            from src.height.estimator import BuildingHeightEstimator
-            est = BuildingHeightEstimator()
-            h_res = est.estimate_from_floor_count(floor_count=3)
-            return HeightEstimationResponse(
-                status="ok",
-                estimated_height_m=h_res.get("height_m", 9.0),
-                confidence_score=0.75,
-                uncertainty_range_m=0.5,
-                floor_count_estimate=3,
-                method="heuristic_baseline",
-                model_version="0.1.0"
-            )
+        except Exception as e:
+            # HONESTY GATE - no silent fallback.
+            # This previously returned an assumed 9.0 m height for an assumed
+            # 3-storey building, with an invented confidence of 0.75 and an
+            # invented +/-0.5 m uncertainty, which callers then persisted as if
+            # the ML Engine had measured the building. A failed ML Engine call
+            # must surface as an error, never as data.
+            logger.warning("ML engine height estimation failed", error=str(e), url=self.base_url)
+            raise MLEngineNotAvailableError(
+                f"Height estimation failed against ML Engine at {self.base_url}: {str(e)}"
+            ) from e
 
     async def estimate_floors(self, req: FloorCountRequest) -> FloorCountResponse:
         """Requests floor count estimation from the real ML Engine.
@@ -195,23 +198,14 @@ class MLEngineClient:
                 )
                 res.raise_for_status()
                 return FloorCountResponse(**res.json())
-        except Exception:
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
-            if ml_dir.exists() and str(ml_dir) not in sys.path:
-                sys.path.insert(0, str(ml_dir))
-            from src.floors.detector import FloorCountDetector
-            det = FloorCountDetector()
-            f_res = det.detect_from_height(req.height_m)
-            fc = f_res.get("floor_count", max(1, int(req.height_m / 3.0)))
-            return FloorCountResponse(
-                status="ok",
-                floor_count=fc,
-                floor_count_above_ground=fc,
-                floor_count_below_ground=0,
-                estimated_ceiling_height_m=req.height_m / fc if fc > 0 else 3.0,
-                confidence=0.80,
-                method="height_division"
-            )
+        except Exception as e:
+            # HONESTY GATE - no silent fallback.
+            # This previously returned an invented confidence of 0.80 with
+            # method "height_division", hiding a failed ML Engine call.
+            logger.warning("ML engine floor estimation failed", error=str(e), url=self.base_url)
+            raise MLEngineNotAvailableError(
+                f"Floor count estimation failed against ML Engine at {self.base_url}: {str(e)}"
+            ) from e
 
     async def generate_vertical_units(self, req: VerticalUnitGenRequest) -> VerticalUnitGenResponse:
         """Requests vertical unit generation from the real ML Engine.
@@ -229,18 +223,14 @@ class MLEngineClient:
                 )
                 res.raise_for_status()
                 return VerticalUnitGenResponse(**res.json())
-        except Exception:
-            ml_dir = Path(__file__).resolve().parent.parent.parent.parent / "ml-engine"
-            if ml_dir.exists() and str(ml_dir) not in sys.path:
-                sys.path.insert(0, str(ml_dir))
-            from src.units.segmenter import UnitSegmenter
-            seg = UnitSegmenter()
-            u_res = seg.segment_floor(floor_area_sqm=req.floor_area_sqm)
-            return VerticalUnitGenResponse(
-                status="ok",
-                floor_number=req.floor_number,
-                units=u_res.get("units", [])
-            )
+        except Exception as e:
+            # HONESTY GATE - no silent fallback.
+            # This previously generated candidate unit boundaries locally and
+            # returned them as though they were ML Engine output.
+            logger.warning("ML engine unit generation failed", error=str(e), url=self.base_url)
+            raise MLEngineNotAvailableError(
+                f"Vertical unit generation failed against ML Engine at {self.base_url}: {str(e)}"
+            ) from e
 
 
 ml_client = MLEngineClient()

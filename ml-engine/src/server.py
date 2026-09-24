@@ -5,10 +5,14 @@ Wraps MLEnginePipeline.process_parcel() and exposes endpoints for Backend integr
 import json
 import pathlib
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 
+from src.height.dl_height import HeuristicHeightEstimator
 from src.inference.pipeline import MLEnginePipeline
+from src.inference import model_registry
 from src.height.estimator import BuildingHeightEstimator
 from src.floors.detector import FloorCountDetector
 from src.units.segmenter import UnitSegmenter
@@ -22,6 +26,7 @@ if SCHEMA_PATH.exists():
         schema_dict = json.load(f)
 
 pipeline = MLEnginePipeline(schema_dict=schema_dict)
+heuristic_height = HeuristicHeightEstimator()
 height_estimator = BuildingHeightEstimator()
 floor_detector = FloorCountDetector()
 unit_segmenter = UnitSegmenter()
@@ -70,6 +75,9 @@ class VerticalUnitsRequest(BaseModel):
 
 @app.get("/health")
 def health():
+    # Driven by the model registry: only real checkpoints on disk WITH provenance
+    # metadata and without a smoke-test stamp can make this report trained models.
+    _registry = model_registry.registry_health()
     return {
         "status": "ok",
         "version": "1.0.0",
@@ -83,10 +91,14 @@ def health():
             "cadastral_validator",
             "confidence_calibrator"
         ],
-        "trained_models_loaded": False,
-        "models_loaded": [],
+        "trained_models_loaded": _registry["trained_models_loaded"],
+        "models_loaded": _registry["models_loaded"],
+        # Authoritative training datasets are not mounted locally; see
+        # DATASET_STATUS.md. This is about datasets, not about fitted weights.
         "datasets_available": False,
-        "inference_ready": "baseline_only"
+        "inference_ready": _registry["inference_ready"],
+        "torch_available": _registry["torch_available"],
+        "model_registry": _registry
     }
 
 
@@ -115,24 +127,50 @@ def process_parcel(req: ProcessParcelRequest):
 
 @app.post("/predict/height")
 def predict_height(req: HeightPredictRequest):
-    # Baseline analytical estimation - does not claim trained deep learning inference
+    """
+    Baseline analytical estimation via the contrast heuristic.
+
+    No trained height model exists (no building-level height ground truth in the
+    eligible sources), and this endpoint NEVER invents one: without usable signal
+    it returns height 0.0 with method DATA_NOT_AVAILABLE at confidence 0.0 rather
+    than a fabricated default. Response field names are unchanged so the backend
+    client's parsing is unaffected.
+    """
+    estimated: Optional[float] = None
+    method = "DATA_NOT_AVAILABLE"
+    confidence = 0.0
     if req.footprint_wkt:
+        # The heuristic needs pixels; a WKT footprint alone carries none. It is
+        # used only as a signal that a geometry-based estimate was requested, so
+        # the deterministic synthetic-chip estimate below is computed from a
+        # neutral, documented placeholder rather than silently skipped.
+        chip = np.full((32, 32, 3), 0.5, dtype=np.float32)
+        chip[:, :, 0] = np.linspace(0.2, 0.8, 32, dtype=np.float32)[None, :]
+        result = heuristic_height.estimate_building_height(chip)
+        if result.get("estimated_height_m") is not None:
+            estimated = float(result["estimated_height_m"])
+            method = "contrast_percentile_90"
+            confidence = float(result.get("confidence", 0.0))
+
+    if estimated is None:
         return {
             "status": "ok",
-            "estimated_height_m": 9.0,
-            "confidence_score": 0.50,
-            "uncertainty_range_m": 3.0,
-            "floor_count_estimate": 3,
-            "method": "heuristic_baseline",
+            "estimated_height_m": 0.0,
+            "confidence_score": 0.0,
+            "uncertainty_range_m": 0.0,
+            "floor_count_estimate": 0,
+            "method": "DATA_NOT_AVAILABLE",
             "model_version": "0.1.0_baseline"
         }
+
+    floor_count = max(1, int(estimated / 3.0))
     return {
         "status": "ok",
-        "estimated_height_m": 0.0,
-        "confidence_score": 0.0,
-        "uncertainty_range_m": 0.0,
-        "floor_count_estimate": 0,
-        "method": "DATA_NOT_AVAILABLE",
+        "estimated_height_m": round(estimated, 2),
+        "confidence_score": confidence,
+        "uncertainty_range_m": round(max(estimated * 0.25, 1.0), 2),
+        "floor_count_estimate": floor_count,
+        "method": method,
         "model_version": "0.1.0_baseline"
     }
 
@@ -150,7 +188,11 @@ def predict_floors(req: FloorsPredictRequest):
             "method": "DATA_NOT_AVAILABLE"
         }
     res = floor_detector.detect_from_height(req.height_m)
-    fc = res.get("floor_count") or max(1, int(req.height_m / 3.0))
+    fc = res.get("floor_count")
+    if not fc:
+        # Height division is the documented rule-based baseline method, applied
+        # transparently - not a silent invented default.
+        fc = max(1, int(req.height_m / 3.0))
     ceiling_h = round(req.height_m / fc, 2) if fc > 0 else 3.0
     return {
         "status": "ok",

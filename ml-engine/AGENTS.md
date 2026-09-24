@@ -48,6 +48,35 @@ AUTHORITATIVE REQUIREMENT:
 Datasets must originate exclusively from data.gov.in or official state/UT *.data.gov.in portals.
 Third-party portals (Kaggle, SpaceNet, INRIA, NASA, OSM, synthetic/scraped sources) are PROHIBITED from active training, validation, or production inference, and remain purely historical metadata references where recorded.
 
+### AMENDMENT 2026-09-23 — last-resort training source (explicit override)
+
+Recorded openly rather than applied silently, because this section states that future
+tasks MUST follow it.
+
+Finding: the data.gov.in path could not supply imagery paired with building labels.
+data.gov.in returns HTTP 403 to automated catalogue access; Bhoonidhi (ISRO/NRSC)
+offers Cartosat imagery by order only and publishes no mask/label products;
+Bhu-Naksha / DILRMP state portals publish cadastral parcels for viewing, not
+building footprints. Building extraction, height, floor-count and unit targets
+are therefore DATA_BLOCKED on government-open sources.
+
+Ruling (project owner, 2026-09-23): government sources first; Kaggle permitted
+ONLY as a last resort, and only when every trained model is labelled honestly.
+
+Mandatory conditions for any Kaggle-derived training run:
+  1. A dataset manifest must exist and be schema-validated
+     (`datasets/manifests/svamitva_drone_kaggle.json`).
+  2. Checkpoint metadata must record `dataset_provenance = KAGGLE_BENCHMARK`,
+     including that labels are community-annotated and not government ground truth.
+  3. No output may claim data.gov.in compliance, cadastral authority, or pan-India
+     validity.
+  4. Third-party pretrained weights bundled with such datasets must NOT be loaded;
+     only models trained in this repository may be registered.
+  5. Datasets outside this amendment remain historical metadata references only.
+
+This amendment covers Task 1 (building extraction) only. Height, floor-count and
+unit delineation remain DATA_BLOCKED and keep their algorithmic baselines.
+
 Legitimate Authoritative Sources:
 - data.gov.in (Open Government Data Platform India)
 - Official State/UT data.gov.in Subdomains (*.data.gov.in)

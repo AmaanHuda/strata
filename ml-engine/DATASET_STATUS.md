@@ -38,3 +38,52 @@ Datasets from Kaggle, SpaceNet, INRIA, NASA, OpenStreetMap, Wuhan University, sy
 1. **Building Footprints**: No public pan-India building footprint vector geometry exists openly on `data.gov.in`. Pipeline uses input cadastral vector boundaries and algorithmic baseline geometric processing.
 2. **LiDAR / High-Resolution Elevation (DSM/DTM)**: Sub-metre DSM/DTM is restricted. Pipeline provides nDSM percentile baseline logic ready for point cloud / raster ingestion.
 3. **Internal Floor Plans**: Architectural drawings / floor layouts are unavailable openly. Vertical unit partitioner operates via mathematical floor area division and volumetric unit reconstruction rules.
+
+---
+
+## 2026-09-24 Amendment — Last-Resort Training Source Used (KAGGLE_BENCHMARK)
+
+Per the dated amendment in `AGENTS.md` §3, the Kaggle last-resort path was invoked on
+2026-09-23 (user-approved) after Phase 1 established that NO Indian government source
+pairs imagery with building mask labels:
+
+| Target | Government-data verdict (Phase 1 evidence table) |
+| :--- | :--- |
+| Building extraction (imagery → masks) | **DATA_BLOCKED** — no gov source publishes imagery + masks together |
+| Building height | **DATA_BLOCKED** — no building-level height ground truth anywhere open |
+| Floor counts | **DATA_BLOCKED** — SVAMITVA treats floors as derivable, not published labels |
+| Units / floor plans | **DATA_BLOCKED** — state portals are viewing-only |
+| Cadastral geometry | **DATA_BLOCKED** for training (Bhu-Naksha is per-state, viewing/export-limited, metadata-only in audit) |
+
+### Source actually used for the single trained checkpoint
+- **Dataset**: `utkarshsaxenadn/svamitva-drone-aerial-images` (Kaggle; SVAMITVA
+  government-origin drone imagery from Smart India Hackathon 2024/25; CC0 license)
+- **Provenance label**: `KAGGLE_BENCHMARK` — community-annotated masks, NOT Survey of
+  India ground truth; never presented as data.gov.in-compliant
+- **Local audit (verified, not assumed)**: 1,322 image/mask pairs; Building =
+  exact colour (0,110,255) per the uploader's own `poly2mask.py`; `FilteredData`
+  (690) is a byte-identical subset of `Full Data` (1,322) — only `Full Data` used;
+  `BinaryMasks` folder is viridis-colormapped and would poison labels — NOT used;
+  61 nodata-blank tiles found (58 excluded, 6 of them building-positive — reported);
+  tiles are spatially adjacent (lag-1 seam diff 31.5 vs 51.0 baseline) → contiguous
+  split mandatory, random-tile split would leak.
+- **Third-party pretrained models bundled in the Kaggle dataset were NOT used.**
+  The checkpoint was trained from scratch on this machine.
+- Full audit embedded in `models/checkpoints/building_extraction_unet/metadata.json`
+  and `datasets/manifests/svamitva_drone_kaggle.json`.
+
+### PostGIS persistence verification (2026-09-24)
+Verified against a REAL PostgreSQL 16.4 + PostGIS 3.6.2 instance (portable local
+install, port 55432) — NOT inferred from the mocked test suite. Proven end-to-end
+over HTTP: register → login → `POST /parcels` → `POST /buildings` → `POST /floors`
+→ `GET /buildings/{id}/floors` → `GET /buildings/{id}/geojson`, with rows confirmed
+by direct SQL (`ST_GeometryType = ST_Polygon`, `ST_Area > 0`, floor FK intact).
+This verification exposed and fixed four real defects that mocked tests could never
+catch: (1) `alembic.ini` / `alembic/env.py` UTF-8 BOM prevented migrations from
+running at all; (2) migration created `users.role` as VARCHAR while the ORM uses a
+PG ENUM — every INSERT failed on real Postgres; (3) SQLAlchemy bound enum member
+NAMES (`'ADMIN'`) instead of values (`'admin'`) — real inserts rejected;
+(4) nothing ever populated `parcels.geometry_2d` / `buildings.footprint_2d`, so all
+PostGIS geometry columns stayed NULL forever and every spatial endpoint silently
+returned nothing. All four are fixed and the mocked suites still pass (90 backend +
+100 ml-engine).

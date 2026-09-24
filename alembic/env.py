@@ -1,4 +1,4 @@
-﻿"""Alembic environment â€” async SQLAlchemy support."""
+"""Alembic environment â€” async SQLAlchemy support."""
 import asyncio
 from logging.config import fileConfig
 

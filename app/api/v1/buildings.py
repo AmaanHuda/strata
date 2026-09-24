@@ -37,7 +37,15 @@ async def create_building(
     user: User = Depends(require_roles(UserRole.ADMIN, UserRole.SURVEYOR, UserRole.ANALYST)),
 ):
     repo = BaseRepository(Building, db)
-    building = await repo.create(data.model_dump(exclude_unset=True))
+    create_data = data.model_dump(exclude_unset=True)
+    # Populate the real PostGIS geometry column from the supplied WKT.
+    # Without this, footprint_2d stays NULL forever and every spatial/
+    # geojson endpoint silently returns nothing (invisible to mocked tests).
+    footprint_wkt = create_data.get("footprint_wkt")
+    if footprint_wkt and not create_data.get("footprint_2d"):
+        from geoalchemy2.elements import WKTElement
+        create_data["footprint_2d"] = WKTElement(footprint_wkt, srid=4326)
+    building = await repo.create(create_data)
     return ApiResponse(data=BuildingOut.model_validate(building), meta={"message": "Building created"})
 
 
