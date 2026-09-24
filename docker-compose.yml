@@ -30,7 +30,6 @@ services:
   # ── ML Engine Service ──────────────────────────────────────────────────────
   # Builds from ml-engine/ (src/server.py FastAPI app).
   # Backend communicates with this via ML_ENGINE_URL=http://ml-engine:8001.
-  # Enable: set ML_ENGINE_ENABLED=true in the backend/worker environment below.
   ml-engine:
     build:
       context: ./ml-engine
@@ -79,6 +78,14 @@ services:
       redis:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

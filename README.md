@@ -2,8 +2,7 @@
 
 **SIH 2026 PS26011 — 3D ULPIN Generation & Vertical Property Mapping System**
 
-This repository contains both the **Backend** (FastAPI) and the **ML Engine** (FastAPI) as separate
-modules in a single monorepo. Their responsibilities are kept cleanly separated.
+This repository contains the **Frontend** (React + Mapbox GL JS / Three.js), the **Backend** (FastAPI), and the **ML Engine** (FastAPI) as unified modules in a clean fullstack monorepo.
 
 > See [`BACKEND_INTEGRATION_GUIDE.md`](./BACKEND_INTEGRATION_GUIDE.md) for the full API reference.
 
@@ -13,6 +12,16 @@ modules in a single monorepo. Their responsibilities are kept cleanly separated.
 
 ```
 3D-MAPPING/
+├── frontend/               ← Frontend (React 19 + TypeScript + Mapbox GL JS + Three.js)
+│   ├── src/                  Application source
+│   │   ├── api/                Backend REST client (Axios, JWT auth)
+│   │   ├── components/         UI, Map, Panels, 3D Scenes
+│   │   ├── state/              Zustand store (real backend entity state)
+│   │   ├── three/              Mapbox 3D terrain space & feature parsing
+│   │   └── ui/                 Main view & modal workflows
+│   ├── Dockerfile            Multi-stage production build (Nginx)
+│   ├── package.json
+│   └── vite.config.ts
 ├── app/                    ← Backend (FastAPI + SQLAlchemy + PostGIS)
 │   ├── api/                  API routes
 │   ├── core/                 Config, auth, errors, logging
@@ -41,8 +50,7 @@ modules in a single monorepo. Their responsibilities are kept cleanly separated.
 │   │   ├── change_detection/
 │   │   ├── validation/
 │   │   └── preprocessing/
-│   ├── datasets/             Dataset manifests (9 Indian/benchmark sources)
-│   ├── models/checkpoints/   building_extraction_unet — real trained checkpoint (KAGGLE_BENCHMARK provenance; weights are reproducible, not committed — see ml-engine/MODEL_STATUS.md)
+│   ├── models/checkpoints/   building_extraction_unet — real trained checkpoint (KAGGLE_BENCHMARK provenance)
 │   ├── schemas/              ml_output_contract.json (v1.0.0)
 │   ├── scripts/              Training + benchmark + validation utilities
 │   │   └── train_building_extraction.py   Reproducible U-Net training harness
@@ -51,9 +59,10 @@ modules in a single monorepo. Their responsibilities are kept cleanly separated.
 │   ├── pyproject.toml
 │   └── Dockerfile
 ├── alembic/                ← DB migrations (backend)
-├── tests/                  ← Backend tests
-├── docker-compose.yml      ← Runs db, redis, backend, worker, ml-engine
-├── .env.example
+├── tests/                  ← Backend tests (86 passing)
+├── docker-compose.yml      ← Fullstack compose (db, redis, backend, worker, ml-engine, frontend)
+├── .env.example            ← Backend environment template
+├── .env                    ← Backend active environment
 └── README.md
 ```
 

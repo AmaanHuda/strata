@@ -1,7 +1,7 @@
+# ── Python & Bytecode ────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
-.env
 .venv/
 # Portable PostGIS used for local persistence verification (Phase 6).
 # Never committed: it is a ~1 GB unpacked database engine, not project source.
@@ -17,6 +17,16 @@ htmlcov/
 *.db
 .DS_Store
 Thumbs.db
+
+# ── Node & Frontend Artifacts ────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+frontend/*.tsbuildinfo
+.lovable/
+frontend/.lovable/
 
 # ── ML Engine artifacts ───────────────────────────────────────────────────────
 ml-engine/__pycache__/
