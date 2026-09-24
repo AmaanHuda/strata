@@ -541,8 +541,9 @@ The contracts are defined in `app/integrations/ml_engine/contracts.py`.
   `KAGGLE_BENCHMARK` provenance; government-**origin** imagery, community
   annotations, **not** Survey of India ground truth). Honest held-out metrics:
   **IoU 0.241 / Dice 0.322** on a leakage-resistant spatial split.
-  Full audit: [`ml-engine/MODEL_STATUS.md`](./ml-engine/MODEL_STATUS.md) and
-  [`ml-engine/DATASET_STATUS.md`](./ml-engine/DATASET_STATUS.md).
+  Full audit: [`ml-engine/MODEL_STATUS.md`](./ml-engine/MODEL_STATUS.md),
+  [`ml-engine/DATASET_STATUS.md`](./ml-engine/DATASET_STATUS.md), and the
+  per-dataset usage map [`ml-engine/datasets/DATASET_CATALOG.md`](./ml-engine/datasets/DATASET_CATALOG.md).
 - **Height / floors / units / cadastral**: no open government-labelled data exists —
   these remain **DATA_BLOCKED** and are served by the algorithmic baselines only.
 - No ML endpoint fabricates values when a model or engine is unavailable; failures

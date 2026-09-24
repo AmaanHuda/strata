@@ -1,5 +1,7 @@
 # Dataset Status & Provenance Audit (SIH 2026 PS 26011)
 
+> **Usage map / per-dataset verification table:** see [`datasets/DATASET_CATALOG.md`](./datasets/DATASET_CATALOG.md) — the authoritative record of which manifests are actively used, metadata-only, or blocked, with verified source URLs and IDs.
+
 ## Policy & Requirement
 Authoritative dataset requirement for SIH 2026 PS 26011:
 **DATASETS MUST COME FROM data.gov.in OR ITS OFFICIAL STATE/UT data.gov.in PORTALS ONLY.**
