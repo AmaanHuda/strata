@@ -42,10 +42,11 @@ modules in a single monorepo. Their responsibilities are kept cleanly separated.
 │   │   ├── validation/
 │   │   └── preprocessing/
 │   ├── datasets/             Dataset manifests (9 Indian/benchmark sources)
-│   ├── models/               Model checkpoints (empty until weights available)
+│   ├── models/checkpoints/   building_extraction_unet — real trained checkpoint (KAGGLE_BENCHMARK provenance; weights are reproducible, not committed — see ml-engine/MODEL_STATUS.md)
 │   ├── schemas/              ml_output_contract.json (v1.0.0)
-│   ├── scripts/              Benchmark + validation utilities
-│   ├── tests/                53 unit tests (100% passing)
+│   ├── scripts/              Training + benchmark + validation utilities
+│   │   └── train_building_extraction.py   Reproducible U-Net training harness
+│   ├── tests/                100 unit tests (torch env) / 99 (torch-free)
 │   ├── docs/                 ML specification & audit documents
 │   ├── pyproject.toml
 │   └── Dockerfile
@@ -533,6 +534,22 @@ Backend ML Adapter → POST /v1/height/estimate
 Configure `ML_ENGINE_BASE_URL` in `.env`.
 The contracts are defined in `app/integrations/ml_engine/contracts.py`.
 
+### Trained model status (2026-09-24)
+
+- **Building-footprint extraction**: a real torch U-Net (1.09M params) has been
+  trained from scratch on SVAMITVA drone tiles (Kaggle community mirror —
+  `KAGGLE_BENCHMARK` provenance; government-**origin** imagery, community
+  annotations, **not** Survey of India ground truth). Honest held-out metrics:
+  **IoU 0.241 / Dice 0.322** on a leakage-resistant spatial split.
+  Full audit: [`ml-engine/MODEL_STATUS.md`](./ml-engine/MODEL_STATUS.md) and
+  [`ml-engine/DATASET_STATUS.md`](./ml-engine/DATASET_STATUS.md).
+- **Height / floors / units / cadastral**: no open government-labelled data exists —
+  these remain **DATA_BLOCKED** and are served by the algorithmic baselines only.
+- No ML endpoint fabricates values when a model or engine is unavailable; failures
+  surface as errors, and every checkpoint must carry provenance metadata to load.
+- Persistence is verified against real **PostgreSQL 16.4 + PostGIS 3.6.2**
+  end-to-end (parcel → building → floor → geometry), not just mocked tests.
+
 ---
 
 ## Running Tests
@@ -558,10 +575,14 @@ See `.env.example` for all variables. Critical ones:
 
 ## Limitations & Disclaimers
 
-1. AI/ML-derived height, floor count, and unit segmentation are **analytical estimates** only.
-2. ULPIN generation uses a deterministic hash — **not the official government ULPIN format**.
-3. Authoritative cadastral records require official survey and legal publication.
-4. PostGIS spatial indexes must be created via Alembic migration for production performance.
+1. Building-footprint extraction uses a **trained U-Net with KAGGLE_BENCHMARK
+   provenance** (community-annotated SVAMITVA mirror) — it is a benchmark
+   demonstration, not government-compliant ground truth.
+2. AI/ML-derived height, floor count, and unit segmentation are **analytical estimates**
+   only (no open labelled data exists to train them; see ml-engine/DATASET_STATUS.md).
+3. ULPIN generation uses a deterministic hash — **not the official government ULPIN format**.
+4. Authoritative cadastral records require official survey and legal publication.
+5. PostGIS spatial indexes must be created via Alembic migration for production performance.
 
 ---
 
