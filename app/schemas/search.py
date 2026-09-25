@@ -34,6 +34,20 @@ class SpatialEntityItem(BaseModel):
     geometry_geojson: Optional[Dict[str, Any]] = None
     centroid: Optional[Dict[str, float]] = None
     distance_m: Optional[float] = None
+    # How the record was matched to a query point: "inside" a footprint, or the
+    # "nearest" record within the tolerance. Lets the UI be honest about which.
+    match_type: Optional[str] = None
+
+
+class SpatialExtentResponse(BaseModel):
+    """Union extent of the geometry actually stored in the backend."""
+    bbox: Optional[List[float]] = None  # [min_lon, min_lat, max_lon, max_lat]
+    has_data: bool
+    building_count: int
+    parcel_count: int
+    center_lon: Optional[float] = None
+    center_lat: Optional[float] = None
+    crs: str = "EPSG:4326"
 
 
 class SpatialBBoxResponse(BaseModel):
@@ -68,3 +82,5 @@ class PointLookupResponse(BaseModel):
     building: Optional[SpatialEntityItem] = None
     floors_count: Optional[int] = None
     units_count: Optional[int] = None
+    # Tolerance actually applied, so the client can explain a proximity match.
+    search_radius_m: Optional[float] = None

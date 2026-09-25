@@ -21,7 +21,12 @@ from geoalchemy2.functions import (
     ST_SetSRID,
     ST_SimplifyPreserveTopology,
     ST_Within,
+    ST_XMax,
+    ST_XMin,
+    ST_YMax,
+    ST_YMin,
 )
+from geoalchemy2 import Geography
 from shapely import wkt as shapely_wkt
 from shapely.geometry import shape
 from sqlalchemy import cast, func, select
@@ -37,6 +42,7 @@ from app.schemas.search import (
     PointLookupResponse,
     SpatialBBoxResponse,
     SpatialEntityItem,
+    SpatialExtentResponse,
     SpatialNearbyResponse,
     SpatialQueryRequest,
 )
@@ -55,6 +61,62 @@ def _extract_centroid_coords(centroid_geojson_str: Optional[str]) -> Optional[Di
     except Exception:
         pass
     return None
+
+
+@router.get("/extent", response_model=ApiResponse[SpatialExtentResponse])
+async def data_extent(
+    layer: str = Query("building", description="Layer filter: 'parcel', 'building', or 'all'"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """
+    Union bounding box + counts of the geometry actually stored in PostGIS.
+
+    Lets clients open the map on the data that really exists, instead of a
+    hard-coded city centre that may be hundreds of kilometres away from it.
+    """
+    bbox: Optional[List[float]] = None
+    building_count = 0
+    parcel_count = 0
+
+    if layer in ["building", "all"]:
+        b_row = (
+            await db.execute(
+                select(
+                    func.count(Building.id),
+                    func.min(ST_XMin(Building.footprint_2d)),
+                    func.min(ST_YMin(Building.footprint_2d)),
+                    func.max(ST_XMax(Building.footprint_2d)),
+                    func.max(ST_YMax(Building.footprint_2d)),
+                ).where(
+                    Building.is_active == True,
+                    Building.footprint_2d.is_not(None),
+                )
+            )
+        ).first()
+        building_count = int(b_row[0] or 0) if b_row else 0
+        if b_row and b_row[1] is not None:
+            bbox = [float(b_row[1]), float(b_row[2]), float(b_row[3]), float(b_row[4])]
+
+    if layer in ["parcel", "all"]:
+        p_count_res = await db.execute(
+            select(func.count(Parcel.id)).where(
+                Parcel.is_active == True,
+                Parcel.geometry_2d.is_not(None),
+            )
+        )
+        parcel_count = int(p_count_res.scalar() or 0)
+
+    return ApiResponse(
+        data=SpatialExtentResponse(
+            bbox=bbox,
+            has_data=bbox is not None,
+            building_count=building_count,
+            parcel_count=parcel_count,
+            center_lon=((bbox[0] + bbox[2]) / 2) if bbox else None,
+            center_lat=((bbox[1] + bbox[3]) / 2) if bbox else None,
+        )
+    )
 
 
 @router.get("/bbox", response_model=ApiResponse[SpatialBBoxResponse])
@@ -199,12 +261,12 @@ async def query_nearby(
     Uses PostGIS geography type for geodesic distance calculation without flat degree distortion.
     """
     center_pt = ST_SetSRID(ST_Point(lon, lat), 4326)
-    center_geog = func.cast(center_pt, func.geography)
+    center_geog = cast(center_pt, Geography)
     results: List[SpatialEntityItem] = []
 
     # Parcels nearby
     if layer in ["parcel", "all"]:
-        parcel_geog = func.cast(Parcel.geometry_2d, func.geography)
+        parcel_geog = cast(Parcel.geometry_2d, Geography)
         dist_expr = ST_Distance(parcel_geog, center_geog)
         stmt = (
             select(
@@ -248,7 +310,7 @@ async def query_nearby(
     # Buildings nearby
     if layer in ["building", "all"] and len(results) < limit:
         remaining = limit - len(results)
-        bld_geog = func.cast(Building.footprint_2d, func.geography)
+        bld_geog = cast(Building.footprint_2d, Geography)
         dist_expr = ST_Distance(bld_geog, center_geog)
         stmt = (
             select(
@@ -434,15 +496,24 @@ async def query_spatial_polygon(
 async def point_lookup(
     lat: float = Query(..., ge=-90, le=90, description="Latitude coordinate"),
     lon: float = Query(..., ge=-180, le=180, description="Longitude coordinate"),
+    radius_m: float = Query(
+        50.0,
+        ge=1.0,
+        le=5000.0,
+        description="Proximity tolerance in meters when the click is not inside a footprint",
+    ),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
     """
     Point lookup: Returns the containing or nearest land parcel, building, and vertical unit counts.
     Uses PostGIS spatial index with ST_Intersects and geodesic distance tolerance to account for 3D map click projection.
+
+    Each returned entity is annotated with match_type: "inside" when the point falls
+    within the footprint, or "nearest" when it is the closest record within radius_m.
     """
     point = ST_SetSRID(ST_Point(lon, lat), 4326)
-    point_geog = func.cast(point, func.geography)
+    point_geog = cast(point, Geography)
 
     # 1. Building Lookup (Direct intersection first, then within tolerance)
     b_stmt = (
@@ -492,7 +563,7 @@ async def point_lookup(
         )
     else:
         # Check within 20m tolerance for 3D perspective / offset clicks
-        bld_geog = func.cast(Building.footprint_2d, func.geography)
+        bld_geog = cast(Building.footprint_2d, Geography)
         dist_expr = ST_Distance(bld_geog, point_geog)
         b_near_stmt = (
             select(
@@ -512,7 +583,7 @@ async def point_lookup(
             .where(
                 Building.is_active == True,
                 Building.footprint_2d.is_not(None),
-                ST_DWithin(bld_geog, point_geog, 50.0),
+                ST_DWithin(bld_geog, point_geog, radius_m),
             )
             .order_by(dist_expr)
             .limit(1)
@@ -608,7 +679,7 @@ async def point_lookup(
             )
     else:
         # Check within 20m tolerance
-        pcl_geog = func.cast(Parcel.geometry_2d, func.geography)
+        pcl_geog = cast(Parcel.geometry_2d, Geography)
         p_dist_expr = ST_Distance(pcl_geog, point_geog)
         p_near_stmt = (
             select(
@@ -625,7 +696,7 @@ async def point_lookup(
             .where(
                 Parcel.is_active == True,
                 Parcel.geometry_2d.is_not(None),
-                ST_DWithin(pcl_geog, point_geog, 50.0),
+                ST_DWithin(pcl_geog, point_geog, radius_m),
             )
             .order_by(p_dist_expr)
             .limit(1)
@@ -700,6 +771,32 @@ async def point_lookup(
         units_count = un_res.scalar() or 0
         floors_count = fl_count or (building_item.floor_count or 0)
 
+    # 5. Annotate how each record was matched, so the UI never claims a pure
+    #    proximity hit was a containment hit (geodesic distance, in metres).
+    if building_item is not None:
+        b_dist_res = await db.execute(
+            select(ST_Distance(cast(Building.footprint_2d, Geography), point_geog)).where(
+                Building.id == building_item.id
+            )
+        )
+        b_dist = b_dist_res.scalar()
+        if b_dist is not None:
+            b_dist = float(b_dist)
+            building_item.distance_m = round(b_dist, 2)
+            building_item.match_type = "inside" if b_dist <= 1e-6 else "nearest"
+
+    if parcel_item is not None:
+        p_dist_res = await db.execute(
+            select(ST_Distance(cast(Parcel.geometry_2d, Geography), point_geog)).where(
+                Parcel.id == parcel_item.id
+            )
+        )
+        p_dist = p_dist_res.scalar()
+        if p_dist is not None:
+            p_dist = float(p_dist)
+            parcel_item.distance_m = round(p_dist, 2)
+            parcel_item.match_type = "inside" if p_dist <= 1e-6 else "nearest"
+
     return ApiResponse(
         data=PointLookupResponse(
             lat=lat,
@@ -708,5 +805,6 @@ async def point_lookup(
             building=building_item,
             floors_count=floors_count,
             units_count=units_count,
+            search_radius_m=radius_m,
         )
     )

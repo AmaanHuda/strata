@@ -9,6 +9,8 @@ import {
   pointLookup,
   getBuildingStructure,
   getBuildingGeometry,
+  getDataExtent,
+  queryBBox,
 } from "@/api/strataBackend";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -41,34 +43,83 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
   );
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null);
 
-  // Set Realistic Lighting and Fly to location
-  useEffect(() => {
-    if (isVisible && mapRef.current) {
-      const map = mapRef.current.getMap();
+  // Key of the area we have already framed, so the effect and onLoad cannot both
+  // fly the camera while a genuinely new selection still re-frames it.
+  const framedForRef = useRef<string | null>(null);
 
-      // Dynamic lighting for realistic shadows
-      map.setLight({
-        anchor: "viewport",
-        color: "#fdf6e3",
-        intensity: 0.4,
-        position: [1.15, 210, 30],
-      });
+  /**
+   * Frame the 3D camera on real data.
+   *
+   * The selection box is the user's area of interest, so if it actually contains
+   * backend records we honour it. When it does not (or is the placeholder centre),
+   * we frame the extent of the geometry really stored in PostGIS. Without this the
+   * camera sat on a hard-coded city hundreds of metres from any record, so every
+   * click resolved to "no backend record" even though the data existed.
+   */
+  const frameOnData = async () => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const key = JSON.stringify(center ?? null);
+    if (framedForRef.current === key) return;
+    framedForRef.current = key;
 
-      if (center && center.length >= 2) {
-        const lngCenter = (center[0].lng + center[1].lng) / 2;
-        const latCenter = (center[0].lat + center[1].lat) / 2;
+    map.setLight({
+      anchor: "viewport",
+      color: "#fdf6e3",
+      intensity: 0.4,
+      position: [1.15, 210, 30],
+    });
 
-        map.flyTo({
-          center: [lngCenter, latCenter],
-          zoom: 16.5,
-          pitch: 60,
-          bearing: -17,
-          duration: 3500,
-        });
+    let bbox: [number, number, number, number] | null = null;
 
-        setSelectedBuilding(null);
+    // 1. Prefer the user's selected box, but only if the backend has records in it.
+    if (center && center.length >= 2) {
+      const lngs = center.map((c) => c.lng);
+      const lats = center.map((c) => c.lat);
+      const minLon = Math.min(...lngs);
+      const maxLon = Math.max(...lngs);
+      const minLat = Math.min(...lats);
+      const maxLat = Math.max(...lats);
+      if ([minLon, maxLon, minLat, maxLat].every(Number.isFinite)) {
+        const inBox = await queryBBox(minLon, minLat, maxLon, maxLat, "all", 1);
+        if (inBox.length > 0) bbox = [minLon, minLat, maxLon, maxLat];
       }
     }
+
+    // 2. Otherwise frame wherever the backend actually has data.
+    if (!bbox) {
+      const extent = await getDataExtent();
+      if (extent?.has_data && extent.bbox) bbox = extent.bbox;
+    }
+
+    if (bbox) {
+      map.fitBounds(
+        [
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[3]],
+        ],
+        { padding: 90, maxZoom: 17.5, pitch: 60, bearing: -17, duration: 3500 }
+      );
+    } else if (center && center.length >= 2) {
+      map.flyTo({
+        center: [
+          (center[0].lng + center[1].lng) / 2,
+          (center[0].lat + center[1].lat) / 2,
+        ],
+        zoom: 16.5,
+        pitch: 60,
+        bearing: -17,
+        duration: 3500,
+      });
+    }
+
+    setSelectedBuilding(null);
+  };
+
+  // Set realistic lighting and frame the camera on real records.
+  useEffect(() => {
+    if (isVisible) void frameOnData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, center]);
 
   /**
@@ -112,7 +163,7 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           area: 0,
           lng: lngLat.lng,
           lat: lngLat.lat,
-          dataSource: "STRATA Backend",
+          dataSource: "Mapbox (preview only) — no backend record",
           isStructure: false,
           geometry: {
             type: "Polygon",
@@ -125,6 +176,11 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
             ]],
           },
         };
+
+    // Everything assembled above is Mapbox-derived. It is only relabelled
+    // "STRATA Backend · PostGIS" once the backend returns an authoritative
+    // record for this location — so the sidebar never claims Mapbox data is ours.
+    mapboxInfo.dataSource = "Mapbox (preview only) — no backend record";
 
     // Clear previous backend data and reset lookup tracking flags
     setBackendBuildingStructure(null);
@@ -140,7 +196,9 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
 
     try {
       // 1. Point lookup: find what the backend knows at this coordinate
-      const lookup = await pointLookup(lngLat.lat, lngLat.lng);
+      // 400 m tolerance: imported footprints are small relative to the map, so a
+      // click just outside one should still resolve it (labelled "nearest match").
+      const lookup = await pointLookup(lngLat.lat, lngLat.lng, 400);
 
       if (lookup?.building) {
         // Mark backend as having returned data before any async calls
@@ -182,9 +240,17 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
             ?? (lookup.building.geometry_geojson as { type: string; coordinates: unknown } | null)
             ?? mapboxInfo.geometry,
           address: structure?.address ?? mapboxInfo.address,
-          dataSource: structure?.provenance?.ml_derived
-            ? `STRATA Backend · ML v${structure.provenance.ml_model_version || "unknown"}`
-            : "STRATA Backend · PostGIS",
+          dataSource: (() => {
+            const base = structure?.provenance?.ml_derived
+              ? `STRATA Backend · ML v${structure.provenance.ml_model_version || "unknown"}`
+              : "STRATA Backend · PostGIS";
+            const how = lookup.building?.match_type;
+            const away = lookup.building?.distance_m;
+            if (how === "nearest") {
+              return `${base} · nearest match${away != null ? ` (${away} m from click)` : ""}`;
+            }
+            return base;
+          })(),
           isStructure: true,
           // Centroid from backend
           lat: geometry?.centroid?.lat ?? lookup.building.centroid?.lat ?? lngLat.lat,
@@ -223,6 +289,10 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
       // Keep Mapbox info but mark lookup as done with no data found.
     } catch {
       // Backend unreachable — keep Mapbox info, don't fabricate backend data
+      setSelectedBuildingDetail({
+        ...mapboxInfo,
+        dataSource: "Mapbox (preview only) — backend unreachable",
+      });
       setBackendBuildingStructure(null);
       setBackendBuildingGeometry(null);
     } finally {
@@ -307,18 +377,7 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
             map.setConfigProperty("basemap", "showPointOfInterestLabels", true);
             map.setConfigProperty("basemap", "showTransitLabels", true);
           }
-          if (center && center.length >= 2) {
-            const lngCenter = (center[0].lng + center[1].lng) / 2;
-            const latCenter = (center[0].lat + center[1].lat) / 2;
-            if (Number.isFinite(lngCenter) && Number.isFinite(latCenter)) {
-              map.jumpTo({
-                center: [lngCenter, latCenter],
-                zoom: 16.5,
-                pitch: 60,
-                bearing: -17,
-              });
-            }
-          }
+          void frameOnData();
         }}
       >
         {/* Terrain DEM source — standard Mapbox 3D terrain */}

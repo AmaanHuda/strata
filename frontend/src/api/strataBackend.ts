@@ -22,6 +22,26 @@ strataApi.interceptors.request.use((config) => {
   return config;
 });
 
+// If the backend rejects our token, drop it and return to the sign-in gate.
+// Without this the UI keeps silently falling back to Mapbox-only data and the
+// user sees "No backend record found" with no explanation why.
+strataApi.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    const status = error?.response?.status;
+    const url: string = error?.config?.url || "";
+    const hadToken = !!localStorage.getItem("strata_access_token");
+    const isAuthCall = url.includes("/auth/login") || url.includes("/auth/refresh");
+    if (status === 401 && hadToken && !isAuthCall) {
+      console.warn("[STRATA] Session rejected by backend — signing out.");
+      localStorage.removeItem("strata_access_token");
+      localStorage.removeItem("strata_refresh_token");
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 // --- Auth ---
 
 export interface TokenResponse {
@@ -65,6 +85,8 @@ export interface SpatialEntityItem {
   geometry_geojson: Record<string, unknown> | null;
   centroid: { lat: number; lon: number } | null;
   distance_m?: number | null;
+  /** "inside" = click landed within the footprint; "nearest" = closest record within tolerance. */
+  match_type?: "inside" | "nearest" | null;
 }
 
 export interface PointLookupResponse {
@@ -74,21 +96,31 @@ export interface PointLookupResponse {
   building: SpatialEntityItem | null;
   floors_count: number;
   units_count: number;
+  search_radius_m?: number | null;
 }
 
-/** Point-in-polygon lookup: returns parcel + building at a lat/lon click. */
+/**
+ * Point-in-polygon lookup: returns parcel + building at a lat/lon click.
+ * `radiusM` widens the proximity tolerance so a click that lands just outside a
+ * small footprint still resolves to that building (reported as match_type: "nearest").
+ */
 export async function pointLookup(
   lat: number,
-  lon: number
+  lon: number,
+  radiusM = 400
 ): Promise<PointLookupResponse | null> {
   try {
     const res = await strataApi.get<{
       success: boolean;
       data: PointLookupResponse;
-    }>("/spatial/search", { params: { lat, lon } });
+    }>("/spatial/search", { params: { lat, lon, radius_m: radiusM } });
     if (res.data.success) return res.data.data;
     return null;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[STRATA] pointLookup failed for lat=${lat}, lon=${lon} (backend ${BACKEND_URL}). Returning no record.`,
+      err
+    );
     return null;
   }
 }
@@ -99,6 +131,34 @@ export interface BBoxResponse {
   crs: string;
   count: number;
   results: SpatialEntityItem[];
+}
+
+export interface DataExtent {
+  bbox: [number, number, number, number] | null;
+  has_data: boolean;
+  building_count: number;
+  parcel_count: number;
+  center_lon: number | null;
+  center_lat: number | null;
+  crs: string;
+}
+
+/**
+ * Extent of the geometry actually stored in the backend.
+ * The map uses this to open on the real data instead of a hard-coded city.
+ */
+export async function getDataExtent(): Promise<DataExtent | null> {
+  try {
+    const res = await strataApi.get<{ success: boolean; data: DataExtent }>(
+      "/spatial/extent",
+      { params: { layer: "all" } }
+    );
+    if (res.data.success) return res.data.data;
+    return null;
+  } catch (err) {
+    console.error(`[STRATA] getDataExtent failed (backend ${BACKEND_URL}).`, err);
+    return null;
+  }
 }
 
 /** Viewport bounding box query for displaying buildings on the map. */
@@ -117,7 +177,11 @@ export async function queryBBox(
     );
     if (res.data.success) return res.data.data.results;
     return [];
-  } catch {
+  } catch (err) {
+    console.error(
+      `[STRATA] queryBBox failed for layer=${layer} (backend ${BACKEND_URL}). Returning empty layer.`,
+      err
+    );
     return [];
   }
 }
@@ -196,7 +260,11 @@ export async function getBuildingStructure(
     }>(`/buildings/${buildingId}/structure`);
     if (res.data.success) return res.data.data;
     return null;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[STRATA] getBuildingStructure failed for building ${buildingId} (backend ${BACKEND_URL}).`,
+      err
+    );
     return null;
   }
 }
@@ -226,7 +294,11 @@ export async function getBuildingGeometry(
     }>(`/buildings/${buildingId}/geometry`);
     if (res.data.success) return res.data.data;
     return null;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[STRATA] getBuildingGeometry failed for building ${buildingId} (backend ${BACKEND_URL}). Falling back to Mapbox geometry.`,
+      err
+    );
     return null;
   }
 }

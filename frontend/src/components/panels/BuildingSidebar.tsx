@@ -279,7 +279,7 @@ export function BuildingSidebar({ info, onClose }: BuildingSidebarProps) {
           </div>
         ) : (
           <div css={css({ fontSize: "0.85rem", color: "#94A3B8", fontStyle: "italic", fontWeight: 600 })}>
-            {isFetching ? "Loading…" : "ULPIN not assigned / not in backend registry"}
+            {isFetching ? "Loading…" : "Not Available / Not Verified"}
           </div>
         )}
 

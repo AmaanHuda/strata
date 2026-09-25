@@ -11,7 +11,7 @@ import hashlib
 import re
 from typing import Any, Dict, Optional, Tuple
 from uuid import UUID
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import NotFoundError, ValidationError
@@ -76,6 +76,65 @@ class ULPINService:
         flr_tag = f"F{floor_number}" if floor_number >= 0 else f"B{abs(floor_number)}"
         return f"{parent_ulpin}-{flr_tag}-U{unit_number}"
 
+    async def _derive_candidate_ulpin(self, entity_type: str, entity_id: UUID) -> str:
+        """
+        Derives a candidate identifier from the entity's cadastral parent chain.
+
+        The internal entity UUID is NEVER embedded in the identifier and no
+        official ULPIN is fabricated. Raises when no cadastral parent identifier
+        exists yet so callers can never receive a made-up value.
+        """
+        if entity_type == "building":
+            parent = await self.db.get(Building, entity_id)
+            if not parent:
+                raise NotFoundError(f"Building {entity_id} not found")
+            parcel = (
+                await self.db.get(Parcel, parent.parcel_id) if parent.parcel_id else None
+            )
+            prefix = (parcel.candidate_ulpin or parcel.official_ulpin) if parcel else None
+            if not prefix:
+                raise ValidationError(
+                    f"Cannot derive a candidate ULPIN for building {entity_id}: its parcel "
+                    "has no cadastral identifier yet. No identifier was fabricated."
+                )
+            ordinal = (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(Building)
+                    .where(Building.parcel_id == parent.parcel_id)
+                )
+            ).scalar() or 0
+            return f"{prefix}-B{ordinal}"
+
+        if entity_type == "floor":
+            parent = await self.db.get(Floor, entity_id)
+            if not parent:
+                raise NotFoundError(f"Floor {entity_id} not found")
+            building = (
+                await self.db.get(Building, parent.building_id) if parent.building_id else None
+            )
+            prefix = (
+                (building.candidate_ulpin or building.official_ulpin) if building else None
+            )
+            if not prefix:
+                raise ValidationError(
+                    f"Cannot derive a candidate ULPIN for floor {entity_id}: its building "
+                    "has no candidate identifier yet. No identifier was fabricated."
+                )
+            return f"{prefix}-F{parent.floor_number}"
+
+        parent = await self.db.get(Unit, entity_id)
+        if not parent:
+            raise NotFoundError(f"Unit {entity_id} not found")
+        floor = await self.db.get(Floor, parent.floor_id) if parent.floor_id else None
+        prefix = (floor.candidate_ulpin or floor.official_ulpin) if floor else None
+        if not prefix:
+            raise ValidationError(
+                f"Cannot derive a candidate ULPIN for unit {entity_id}: its floor has no "
+                "candidate identifier yet. No identifier was fabricated."
+            )
+        return f"{prefix}-U{parent.unit_number}"
+
     async def generate_and_store(
         self,
         req: ULPINGenerateRequest,
@@ -139,11 +198,9 @@ class ULPINService:
             if existing:
                 return existing
 
-            candidate = f"CAND-{req.state}-{req.district}-{entity_type.upper()[:1]}-{str(req.entity_id)[:8].upper()}"
-            if entity_type == "floor" and req.floor_number is not None:
-                candidate = f"{candidate}-F{req.floor_number}"
-            elif entity_type == "unit" and req.unit_number:
-                candidate = f"{candidate}-U{req.unit_number}"
+            # Candidate identifiers are derived from the cadastral parent chain
+            # (parcel -> building -> floor -> unit), never from the internal UUID.
+            candidate = await self._derive_candidate_ulpin(entity_type, req.entity_id)
 
             record = ULPINRecord(
                 candidate_ulpin=candidate,

@@ -1,0 +1,58 @@
+{
+  "type": "FeatureCollection",
+  "name": "strata_sample_buildings",
+  "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "name": "TCET Block A", "building_type": "academic", "floor_count": 4, "height_m": 14.5, "confidence": 0.82, "parcel_number": "SAMPLE-A-0001" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.87940, 19.20860], [72.87980, 19.20860], [72.87980, 19.20890], [72.87940, 19.20890], [72.87940, 19.20860]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "TCET Block B", "building_type": "academic", "floor_count": 3, "height_m": 11.0, "confidence": 0.79, "parcel_number": "SAMPLE-A-0002" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.87990, 19.20860], [72.88030, 19.20860], [72.88030, 19.20890], [72.87990, 19.20890], [72.87990, 19.20860]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Residential Tower 1", "building_type": "residential", "floor_count": 8, "height_m": 25.5, "confidence": 0.71, "parcel_number": "SAMPLE-A-0003" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.87940, 19.20900], [72.87970, 19.20900], [72.87970, 19.20925], [72.87940, 19.20925], [72.87940, 19.20900]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Residential Tower 2", "building_type": "residential", "floor_count": 7, "height_m": 22.0, "confidence": 0.68, "parcel_number": "SAMPLE-A-0004" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.87990, 19.20900], [72.88020, 19.20900], [72.88020, 19.20925], [72.87990, 19.20925], [72.87990, 19.20900]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Commercial Complex", "building_type": "commercial", "floor_count": 2, "height_m": 8.5, "confidence": 0.75, "parcel_number": "SAMPLE-A-0005" },
+      "geometry": {
+        "type": "MultiPolygon",
+        "coordinates": [
+          [[[72.88040, 19.20900], [72.88070, 19.20900], [72.88070, 19.20920], [72.88040, 19.20920], [72.88040, 19.20900]]],
+          [[[72.88080, 19.20900], [72.88085, 19.20900], [72.88085, 19.20905], [72.88080, 19.20905], [72.88080, 19.20900]]]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "name": "Amenity Block" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[72.88040, 19.20860], [72.88060, 19.20860], [72.88060, 19.20880], [72.88040, 19.20880], [72.88040, 19.20860]]]
+      }
+    }
+  ]
+}

@@ -275,7 +275,7 @@ export function BuildingIsolateScene() {
             <InfoRow
               icon={<Hash size={18} />}
               label="ULPIN"
-              value={isFetching ? "Loading…" : "Not assigned"}
+              value={isFetching ? "Loading…" : "Not Available / Not Verified"}
             />
           )}
 

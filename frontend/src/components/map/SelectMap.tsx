@@ -4,6 +4,7 @@ import { css } from "@emotion/react";
 import { Hand, SquareMousePointer, Trash2 } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { INK, TEXT_PRIMARY } from "@/theme/color";
+import { queryBBox, getDataExtent, type SpatialEntityItem } from "@/api/strataBackend";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
@@ -40,6 +41,80 @@ export function MapComponent({
   const [endPoint, setEndPoint] = useState<{lat: number, lng: number} | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [center, setCenter] = useState<{ lat: number; lng: number }>({ lat: 18.9220, lng: 72.8347 });
+
+  // Real geometry pulled from the backend for the current viewport.
+  const [backendFeatures, setBackendFeatures] = useState<any | null>(null);
+  const [backendCount, setBackendCount] = useState(0);
+  const [backendLoaded, setBackendLoaded] = useState(false);
+  // Mapbox must finish loading before fitBounds / getBounds mean anything.
+  // Calling them on mount silently used the stale default viewport (a city
+  // centre unrelated to the data), which is why the map opened on empty ground.
+  const [mapReady, setMapReady] = useState(false);
+
+  /**
+   * Load the real parcels/buildings for the viewport from PostGIS and draw them.
+   * Without this the map is just a basemap, so there is no way to see where the
+   * backend's data actually is before drawing a box over empty ground.
+   */
+  const loadBackendData = useCallback(async () => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const bounds = map.getBounds();
+    if (!bounds) return;
+
+    const items = await queryBBox(
+      bounds.getWest(),
+      bounds.getSouth(),
+      bounds.getEast(),
+      bounds.getNorth(),
+      "all",
+      200
+    );
+    setBackendCount(items.length);
+
+    const features = items
+      .filter((i: SpatialEntityItem) => Boolean(i.geometry_geojson))
+      .map((i: SpatialEntityItem) => ({
+        type: "Feature" as const,
+        properties: {
+          id: i.id,
+          kind: i.entity_type,
+          name: i.identifier,
+          ulpin: i.candidate_ulpin || i.official_ulpin || null,
+          height_m: i.height_m ?? null,
+          floor_count: i.floor_count ?? null,
+          area_sqm: i.area_sqm ?? null,
+        },
+        geometry: i.geometry_geojson,
+      }));
+
+    setBackendFeatures({ type: "FeatureCollection", features });
+    setBackendLoaded(true);
+  }, []);
+
+  // Open on the extent of the data that actually exists, then draw it.
+  useEffect(() => {
+    if (!mapReady) return;
+    let cancelled = false;
+    void (async () => {
+      const extent = await getDataExtent();
+      if (cancelled) return;
+      if (extent?.has_data && extent.bbox && mapRef.current) {
+        const [minLon, minLat, maxLon, maxLat] = extent.bbox;
+        mapRef.current.fitBounds(
+          [
+            [minLon, minLat],
+            [maxLon, maxLat],
+          ],
+          { padding: 70, maxZoom: 16, duration: 0 }
+        );
+      }
+      await loadBackendData();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mapReady, loadBackendData]);
 
   const handleClickSwitchDrag = () => {
     setIsDrag(!isDrag);
@@ -231,13 +306,45 @@ export function MapComponent({
           }}
           mapStyle="mapbox://styles/mapbox/streets-v12"
           dragPan={isDrag}
+          onLoad={() => setMapReady(true)}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMove={onMove}
+          onMoveEnd={loadBackendData}
           interactiveLayerIds={[]}
           cursor={isDrag ? "grab" : "crosshair"}
         >
+          {backendFeatures && (
+            <Source id="strata-backend" type="geojson" data={backendFeatures}>
+              <Layer
+                id="strata-backend-parcels-line"
+                type="line"
+                filter={["==", ["get", "kind"], "parcel"]}
+                paint={{
+                  "line-color": "rgba(37, 99, 235, 0.9)",
+                  "line-width": 1.8,
+                  "line-dasharray": [2, 1.5],
+                }}
+              />
+              <Layer
+                id="strata-backend-buildings-fill"
+                type="fill"
+                filter={["==", ["get", "kind"], "building"]}
+                paint={{
+                  "fill-color": "rgba(16, 185, 129, 0.38)",
+                  "fill-outline-color": "rgba(5, 150, 105, 0.95)",
+                }}
+              />
+              <Layer
+                id="strata-backend-buildings-line"
+                type="line"
+                filter={["==", ["get", "kind"], "building"]}
+                paint={{ "line-color": "rgba(5, 150, 105, 1)", "line-width": 2 }}
+              />
+            </Source>
+          )}
+
           {geoJsonData && (
             <Source type="geojson" data={geoJsonData as any}>
               <Layer
@@ -258,6 +365,29 @@ export function MapComponent({
             </Source>
           )}
         </Map>
+      </div>
+
+      {/* Backend data indicator — proves whether real records are in view */}
+      <div
+        css={css({
+          position: "absolute",
+          zIndex: 9,
+          left: "1rem",
+          top: "1rem",
+          background: "rgba(255, 255, 255, 0.96)",
+          border: `2px solid ${INK}`,
+          boxShadow: "2px 2px 0px #0F172A",
+          padding: "0.4rem 0.7rem",
+          borderRadius: "10px",
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          color: backendCount > 0 ? "#047857" : TEXT_PRIMARY,
+          pointerEvents: "none",
+        })}
+      >
+        {backendLoaded
+          ? `${backendCount} backend record${backendCount === 1 ? "" : "s"} in view`
+          : "Loading backend data…"}
       </div>
 
       <div
