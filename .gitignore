@@ -18,6 +18,15 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# ── Environment & Secrets ────────────────────────────────────────────────────
+# Real credentials must never be committed. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
 # ── Node & Frontend Artifacts ────────────────────────────────────────────────
 node_modules/
 frontend/node_modules/
