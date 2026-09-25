@@ -98,22 +98,57 @@ def calculate_centroid(coords: List[Tuple[float, float]]) -> Tuple[float, float]
     return (cx_accum / a, cy_accum / a)
 
 
-def point_in_polygon(point: Tuple[float, float], polygon_coords: List[Tuple[float, float]]) -> bool:
-    x, y = point
-    pts = list(polygon_coords)
-    n = len(pts)
-    inside = False
+def _on_segment(
+    point: Tuple[float, float],
+    a: Tuple[float, float],
+    b: Tuple[float, float],
+    tolerance: float,
+) -> bool:
+    """True when `point` lies on the segment a-b within `tolerance`."""
+    px, py = point
+    ax, ay = a
+    bx, by = b
+    cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+    if abs(cross) > tolerance * max(1.0, abs(bx - ax) + abs(by - ay)):
+        return False
+    return (
+        min(ax, bx) - tolerance <= px <= max(ax, bx) + tolerance
+        and min(ay, by) - tolerance <= py <= max(ay, by) + tolerance
+    )
 
-    p1x, p1y = pts[0]
-    for i in range(n + 1):
-        p2x, p2y = pts[i % n]
-        if y > min(p1y, p2y):
-            if y <= max(p1y, p2y):
-                if x <= max(p1x, p2x):
-                    if p1y != p2y:
-                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xinters:
-                        inside = not inside
-        p1x, p1y = p2x, p2y
+
+def point_in_polygon(
+    point: Tuple[float, float],
+    polygon_coords: List[Tuple[float, float]],
+    tolerance: float = 1e-9,
+) -> bool:
+    """
+    Ray-casting containment test.
+
+    Points that lie exactly on the boundary (a shared vertex or edge — e.g. a
+    footprint derived from its own parcel) count as inside. The previous
+    implementation iterated ``range(n + 1)`` over an already-closed ring, so
+    every edge after the first was traversed twice and the inside/outside parity
+    flipped back; a polygon was then reported as having its own vertices outside
+    itself.
+    """
+    x, y = point
+    ring = list(polygon_coords)
+    if len(ring) > 1 and ring[0] == ring[-1]:
+        ring = ring[:-1]
+    n = len(ring)
+    if n < 3:
+        return False
+
+    inside = False
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        if _on_segment((x, y), (x1, y1), (x2, y2), tolerance):
+            return True
+        if (y1 > y) != (y2 > y):
+            xinters = (y - y1) * (x2 - x1) / (y2 - y1) + x1
+            if x <= xinters:
+                inside = not inside
 
     return inside

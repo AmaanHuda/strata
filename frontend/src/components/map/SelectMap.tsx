@@ -4,7 +4,18 @@ import { css } from "@emotion/react";
 import { Hand, SquareMousePointer, Trash2 } from "lucide-react";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { INK, TEXT_PRIMARY } from "@/theme/color";
-import { queryBBox, getDataExtent, type SpatialEntityItem } from "@/api/strataBackend";
+import {
+  queryBBox,
+  getDataExtent,
+  ingestLocation,
+  type SpatialEntityItem,
+} from "@/api/strataBackend";
+
+/** Approximate metres per degree of longitude at a given latitude. */
+function metresPerDegree(lat: number) {
+  const latRad = (lat * Math.PI) / 180;
+  return { lon: 111320 * Math.cos(latRad), lat: 110540 };
+}
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
@@ -41,6 +52,15 @@ export function MapComponent({
   const [endPoint, setEndPoint] = useState<{lat: number, lng: number} | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [center, setCenter] = useState<{ lat: number; lng: number }>({ lat: 18.9220, lng: 72.8347 });
+
+  // On-demand ingestion controls (real OpenStreetMap source data).
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [ingestMessage, setIngestMessage] = useState<string | null>(null);
+  const [ingestError, setIngestError] = useState(false);
+  // Cadastral context is operator-supplied: the ULPIN code segments come from
+  // real administrative names, and OSM usually carries no addr:state tag.
+  const [ingestState, setIngestState] = useState("");
+  const [ingestDistrict, setIngestDistrict] = useState("");
 
   // Real geometry pulled from the backend for the current viewport.
   const [backendFeatures, setBackendFeatures] = useState<any | null>(null);
@@ -115,6 +135,68 @@ export function MapComponent({
       cancelled = true;
     };
   }, [mapReady, loadBackendData]);
+
+  /**
+   * Fetch real OSM footprints for the drawn box (or the current map centre) and
+   * reload the drawn backend layer. Nothing is fabricated: if OpenStreetMap has
+   * no building there, the message says so and the database stays unchanged.
+   */
+  const handleIngest = useCallback(async () => {
+    let target = center;
+    let radiusM = 300;
+    if (startPoint && endPoint) {
+      const lat = (startPoint.lat + endPoint.lat) / 2;
+      const lng = (startPoint.lng + endPoint.lng) / 2;
+      const perDeg = metresPerDegree(lat);
+      const widthM = Math.abs(endPoint.lng - startPoint.lng) * perDeg.lon;
+      const heightM = Math.abs(endPoint.lat - startPoint.lat) * perDeg.lat;
+      // Cover the drawn area, clamped to the API's accepted 10 m - 2000 m range.
+      radiusM = Math.min(2000, Math.max(10, Math.round(Math.max(widthM, heightM) / 2)));
+      target = { lat, lng };
+    }
+
+    setIsIngesting(true);
+    setIngestError(false);
+    setIngestMessage("Fetching real footprints from OpenStreetMap…");
+    try {
+      const result = await ingestLocation({
+        lat: target.lat,
+        lon: target.lng,
+        radiusM,
+        state: ingestState.trim() || undefined,
+        district: ingestDistrict.trim() || undefined,
+        maxBuildings: 10,
+      });
+      if (!result) {
+        setIngestError(true);
+        setIngestMessage("Ingestion failed. See the console for the backend response.");
+        return;
+      }
+      if (result.buildings_ingested === 0) {
+        setIngestError(true);
+        setIngestMessage(
+          result.skipped_reasons[0]
+            ?? `OpenStreetMap returned ${result.buildings_found} footprint(s); nothing new was stored.`
+        );
+        return;
+      }
+      const source = result.buildings[0];
+      const provenanceBits = [
+        source?.height_source ? `height: ${source.height_source}` : null,
+        source?.floor_source ? `floors: ${source.floor_source}` : null,
+        source?.ml_used ? `ML ${source.ml_model_version ?? ""}`.trim() : "no ML",
+      ].filter(Boolean);
+      setIngestMessage(
+        `Stored ${result.buildings_ingested} real record(s) · ${result.floors_created} floors · ` +
+          `${result.units_created} candidate units · e.g. ${
+            result.candidate_ulpins[0] ?? "no candidate ULPIN"
+          } (NON-AUTHORITATIVE) · ${provenanceBits.join(" · ")}`
+      );
+      await loadBackendData();
+    } finally {
+      setIsIngesting(false);
+    }
+  }, [center, startPoint, endPoint, ingestState, ingestDistrict, loadBackendData]);
 
   const handleClickSwitchDrag = () => {
     setIsDrag(!isDrag);
@@ -232,6 +314,30 @@ export function MapComponent({
           flexWrap: "wrap",
         })}
       >
+        <button
+          css={css({
+            color: "#ffffff",
+            backgroundColor: isIngesting ? "#64748B" : "#047857",
+            border: `2px solid ${INK}`,
+            padding: "0.6rem 0.95rem",
+            borderRadius: "12px",
+            cursor: isIngesting ? "wait" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            fontWeight: 800,
+            fontSize: "12px",
+            boxShadow: "2px 2px 0px #0F172A",
+            ":hover": { transform: "translate(-1px, -1px)", boxShadow: "3px 3px 0px #0F172A" },
+            ":active": { transform: "translate(2px, 2px)", boxShadow: "0px 0px 0px #0F172A" },
+          })}
+          disabled={isIngesting}
+          onClick={() => void handleIngest()}
+          title="Fetch real building footprints from OpenStreetMap for this area and store them as CANDIDATE records"
+        >
+          {isIngesting ? "Fetching real data…" : "Fetch real data here"}
+        </button>
+
         <button
           css={css({
             display: (startPoint == null) || isDrag ? "none" : "inline-flex",
@@ -374,20 +480,92 @@ export function MapComponent({
           zIndex: 9,
           left: "1rem",
           top: "1rem",
-          background: "rgba(255, 255, 255, 0.96)",
-          border: `2px solid ${INK}`,
-          boxShadow: "2px 2px 0px #0F172A",
-          padding: "0.4rem 0.7rem",
-          borderRadius: "10px",
-          fontSize: "0.72rem",
-          fontWeight: 800,
-          color: backendCount > 0 ? "#047857" : TEXT_PRIMARY,
-          pointerEvents: "none",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.4rem",
+          maxWidth: "60%",
         })}
       >
-        {backendLoaded
-          ? `${backendCount} backend record${backendCount === 1 ? "" : "s"} in view`
-          : "Loading backend data…"}
+        <div
+          css={css({
+            background: "rgba(255, 255, 255, 0.96)",
+            border: `2px solid ${INK}`,
+            boxShadow: "2px 2px 0px #0F172A",
+            padding: "0.4rem 0.7rem",
+            borderRadius: "10px",
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            color: backendCount > 0 ? "#047857" : TEXT_PRIMARY,
+            pointerEvents: "none",
+            width: "fit-content",
+          })}
+        >
+          {backendLoaded
+            ? `${backendCount} backend record${backendCount === 1 ? "" : "s"} in view`
+            : "Loading backend data…"}
+        </div>
+
+        {/* Optional cadastral context: the ULPIN code segments come from these
+            real administrative names. OSM rarely carries addr:state. */}
+        <div
+          css={css({
+            display: "flex",
+            gap: "0.3rem",
+            background: "rgba(255, 255, 255, 0.96)",
+            border: `2px solid ${INK}`,
+            boxShadow: "2px 2px 0px #0F172A",
+            padding: "0.3rem 0.4rem",
+            borderRadius: "10px",
+            width: "fit-content",
+          })}
+        >
+          <input
+            value={ingestState}
+            onChange={(e) => setIngestState(e.target.value)}
+            placeholder="State (e.g. Maharashtra)"
+            css={css({
+              border: "1.5px solid #CBD5E1",
+              borderRadius: "7px",
+              padding: "0.28rem 0.45rem",
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              width: "150px",
+              outline: "none",
+            })}
+          />
+          <input
+            value={ingestDistrict}
+            onChange={(e) => setIngestDistrict(e.target.value)}
+            placeholder="District (e.g. Mumbai)"
+            css={css({
+              border: "1.5px solid #CBD5E1",
+              borderRadius: "7px",
+              padding: "0.28rem 0.45rem",
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              width: "140px",
+              outline: "none",
+            })}
+          />
+        </div>
+
+        {ingestMessage ? (
+          <div
+            css={css({
+              background: ingestError ? "#FEF2F2" : "#ECFDF5",
+              border: `2px solid ${ingestError ? "#FCA5A5" : "#6EE7B7"}`,
+              color: ingestError ? "#991B1B" : "#065F46",
+              borderRadius: "10px",
+              padding: "0.4rem 0.7rem",
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              lineHeight: 1.45,
+              maxWidth: "420px",
+            })}
+          >
+            {ingestMessage}
+          </div>
+        ) : null}
       </div>
 
       <div

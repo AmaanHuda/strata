@@ -140,6 +140,8 @@ class MLEngineClient:
                 height_m=req.height_m,
                 evidence=req.evidence,
                 crs=req.crs,
+                floor_count_metadata=getattr(req, "floor_count", None),
+                height_source=getattr(req, "height_source", None),
             )
             return MLOutputContractV1.model_validate(out_dict)
 

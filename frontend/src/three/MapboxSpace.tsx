@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import Map, { MapRef, NavigationControl, Source } from "react-map-gl/mapbox";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Map, { Layer, MapRef, NavigationControl, Source } from "react-map-gl/mapbox";
 import type { MapMouseEvent } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useAreaStore } from "@/state/areaStore";
@@ -42,6 +42,15 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
     (state) => state.setBackendFoundData
   );
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null);
+  // Set when the currently selected entity is a real backend record, which is the
+  // only case where we are allowed to draw our own 3D geometry over the basemap.
+  const [isolatedBuilding, setIsolatedBuilding] = useState<{
+    id: string;
+    geometry: { type: string; coordinates: unknown };
+    heightM: number;
+    floors: number;
+    label: string;
+  } | null>(null);
 
   // Key of the area we have already framed, so the effect and onLoad cannot both
   // fly the camera while a genuinely new selection still re-frames it.
@@ -191,6 +200,7 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
     // Show sidebar immediately with Mapbox info, then enrich with backend
     setSelectedBuildingDetail(mapboxInfo);
     setSelectedBuilding(mapboxInfo);
+    setIsolatedBuilding(null);
     setAppStep(2);
     setIsFetchingBackendBuilding(true);
 
@@ -259,7 +269,39 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
 
         setSelectedBuildingDetail(enriched);
         setSelectedBuilding(enriched);
+
+        // 5. Isolate exactly this building in 3D using the REAL backend footprint.
+        //    Only genuine PostGIS geometry is extruded here — never a synthesised
+        //    box — and its height is the stored height. If the backend has no
+        //    height, nothing is extruded (the sidebar states that instead).
+        const realGeometry =
+          (enriched.geometry as { type: string; coordinates: unknown } | null) ?? null;
+        if (realGeometry?.coordinates && (enriched.floors ?? 0) > 0) {
+          const geometry = realGeometry as { type: string; coordinates: unknown };
+          const heightM = Number(enriched.height ?? 0) > 0 ? Number(enriched.height) : 0;
+          if (heightM > 0) {
+            setIsolatedBuilding({
+              id: backendBuildingId,
+              geometry,
+              heightM,
+              floors: Number(enriched.floors ?? 1),
+              label: enriched.name ?? "Selected building",
+            });
+            const focus = lookup.building.centroid
+              ?? (geometry.coordinates ? centroidOf(geometry.coordinates) : null);
+            if (focus) {
+              map.flyTo({
+                center: [focus.lon, focus.lat],
+                zoom: 18.2,
+                pitch: 62,
+                bearing: -22,
+                duration: 1800,
+              });
+            }
+          }
+        }
       } else if (lookup?.parcel) {
+        setIsolatedBuilding(null);
         // Parcel found but no building in backend at this point
         setBackendFoundData(true);
         const enrichedParcel: BuildingInfo = {
@@ -301,6 +343,27 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
     }
   };
 
+  /** Walk a (Multi)Polygon coordinate tree and return its centre point. */
+  const centroidOf = (coordinates: unknown): { lat: number; lon: number } | null => {
+    const points: [number, number][] = [];
+    const walk = (value: unknown) => {
+      if (!Array.isArray(value)) return;
+      if (typeof value[0] === "number" && typeof value[1] === "number") {
+        points.push([value[0] as number, value[1] as number]);
+        return;
+      }
+      value.forEach(walk);
+    };
+    walk(coordinates);
+    if (!points.length) return null;
+    const lons = points.map((p) => p[0]);
+    const lats = points.map((p) => p[1]);
+    return {
+      lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+      lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    };
+  };
+
   const handleMouseEnter = () => {
     if (mapRef.current) {
       mapRef.current.getMap().getCanvas().style.cursor = "pointer";
@@ -312,6 +375,23 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
       mapRef.current.getMap().getCanvas().style.cursor = "";
     }
   };
+
+  /** GeoJSON for the isolated building only — real backend footprint. */
+  const isolatedGeoJSON = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      features: isolatedBuilding
+        ? [
+            {
+              type: "Feature" as const,
+              properties: { label: isolatedBuilding.label },
+              geometry: isolatedBuilding.geometry,
+            },
+          ]
+        : [],
+    }),
+    [isolatedBuilding]
+  );
 
   if (!MAPBOX_TOKEN) {
     return (
@@ -394,6 +474,37 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           fabricated data. Real building geometry comes from the backend after a
           click and is rendered in BuildingIsolateScene via IsolatedMapboxObject.
         */}
+        {/*
+          3D isolation of the selected backend record.
+          This is REAL PostGIS geometry (the stored footprint) extruded to the
+          stored height, drawn above the basemap's own generic extrusions so the
+          selected property is unmistakable. When the backend has no record (or no
+          height) this source is empty and nothing is drawn — we never invent a
+          block to highlight.
+        */}
+        {isolatedBuilding && (
+          <Source id="strata-isolated-building" type="geojson" data={isolatedGeoJSON as any}>
+            <Layer
+              id="strata-isolated-building-extrusion"
+              type="fill-extrusion"
+              slot="top"
+              paint={{
+                "fill-extrusion-color": "#F59E0B",
+                "fill-extrusion-height": isolatedBuilding.heightM,
+                "fill-extrusion-base": 0,
+                "fill-extrusion-opacity": 0.92,
+                "fill-extrusion-vertical-gradient": true,
+              }}
+            />
+            <Layer
+              id="strata-isolated-building-outline"
+              type="line"
+              slot="top"
+              paint={{ "line-color": "#B45309", "line-width": 2.5 }}
+            />
+          </Source>
+        )}
+
         <NavigationControl position="bottom-right" visualizePitch={true} />
       </Map>
 
@@ -404,9 +515,36 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           setSelectedBuildingDetail(null);
           setBackendBuildingStructure(null);
           setBackendBuildingGeometry(null);
+          setIsolatedBuilding(null);
           setAppStep(1);
         }}
       />
+
+      {/* Isolation badge — makes it explicit that the amber block is a real record. */}
+      {isolatedBuilding && (
+        <div
+          style={{
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            bottom: "1.5rem",
+            background: "rgba(255,255,255,0.96)",
+            border: "2px solid #0F172A",
+            boxShadow: "2px 2px 0px #0F172A",
+            borderRadius: "12px",
+            padding: "0.5rem 0.85rem",
+            fontSize: "12px",
+            fontWeight: 800,
+            color: "#0F172A",
+            zIndex: 10,
+            pointerEvents: "none",
+            maxWidth: "80%",
+          }}
+        >
+          3D isolation · {isolatedBuilding.label} · {isolatedBuilding.heightM.toFixed(1)} m ·{" "}
+          {isolatedBuilding.floors} floors · real PostGIS record
+        </div>
+      )}
     </div>
   );
 }

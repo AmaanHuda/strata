@@ -283,6 +283,137 @@ export interface BuildingGeometry {
   processing_crs: string;
 }
 
+// --- On-demand ingestion (real OpenStreetMap data for any Indian coordinate) ---
+
+export interface IngestedUnit {
+  id: string;
+  unit_number: string;
+  unit_type: string | null;
+  area_sqm: number | null;
+  candidate_ulpin: string | null;
+  status: string;
+  ml_derived: boolean;
+}
+
+export interface IngestedFloor {
+  id: string;
+  floor_number: number;
+  floor_label: string | null;
+  floor_use: string | null;
+  height_above_ground_m: number | null;
+  ceiling_height_m: number | null;
+  floor_area_sqm: number | null;
+  candidate_ulpin: string | null;
+  status: string;
+  floor_source: string | null;
+  units: IngestedUnit[];
+}
+
+export interface IngestedBuilding {
+  building_id: string;
+  parcel_id: string;
+  parcel_number: string;
+  building_name: string | null;
+  building_type: string | null;
+  osm_type: string;
+  osm_id: number;
+  source_url: string;
+  osm_tags: Record<string, unknown>;
+  height_m: number | null;
+  height_source: string | null;
+  floor_count: number | null;
+  floor_source: string | null;
+  footprint_area_sqm: number | null;
+  footprint_geojson: Record<string, unknown> | null;
+  centroid: { lat: number; lon: number } | null;
+  official_ulpin: string | null;
+  candidate_ulpin: string | null;
+  status: string;
+  ml_used: boolean;
+  ml_model_version: string | null;
+  ml_confidence: number | null;
+  ml_data_status: string | null;
+  ml_review_status: string | null;
+  ml_validation: Record<string, unknown> | null;
+  floors: IngestedFloor[];
+  units_created: number;
+  already_existed: boolean;
+}
+
+export interface IngestLocationResult {
+  query_lat: number;
+  query_lon: number;
+  radius_m: number;
+  source: string;
+  buildings_found: number;
+  buildings_ingested: number;
+  buildings_skipped: number;
+  parcels_created: number;
+  parcels_reused: number;
+  floors_created: number;
+  units_created: number;
+  candidate_ulpins: string[];
+  buildings: IngestedBuilding[];
+  skipped_reasons: string[];
+  authoritative: boolean;
+  disclaimers: string[];
+}
+
+/**
+ * Fetch real OSM footprints for a coordinate and persist them as CANDIDATE records.
+ * Nothing is fabricated: geometry and tags come from OpenStreetMap, and any
+ * height/floor value the source does not carry is left null or tagged ML-derived.
+ */
+export async function ingestLocation(params: {
+  lat: number;
+  lon: number;
+  radiusM?: number;
+  nameContains?: string;
+  state?: string;
+  district?: string;
+  maxBuildings?: number;
+  runMl?: boolean;
+}): Promise<IngestLocationResult | null> {
+  try {
+    const res = await strataApi.post<{ success: boolean; data: IngestLocationResult }>(
+      "/ingest/location",
+      {
+        lat: params.lat,
+        lon: params.lon,
+        radius_m: params.radiusM ?? 200,
+        name_contains: params.nameContains ?? null,
+        state: params.state ?? null,
+        district: params.district ?? null,
+        max_buildings: params.maxBuildings ?? 10,
+        run_ml: params.runMl ?? true,
+      },
+      { timeout: 180000 } // Overpass + ML inference is slower than a plain read
+    );
+    if (res.data.success) return res.data.data;
+    return null;
+  } catch (err) {
+    console.error(
+      `[STRATA] ingestLocation failed for lat=${params.lat}, lon=${params.lon} (backend ${BACKEND_URL}).`,
+      err
+    );
+    return null;
+  }
+}
+
+/** Persisted row counts, so coverage is observable rather than assumed. */
+export async function getIngestCoverage(): Promise<Record<string, number> | null> {
+  try {
+    const res = await strataApi.get<{ success: boolean; data: Record<string, number> }>(
+      "/ingest/coverage"
+    );
+    if (res.data.success) return res.data.data;
+    return null;
+  } catch (err) {
+    console.error("[STRATA] getIngestCoverage failed.", err);
+    return null;
+  }
+}
+
 /** Fetch real GeoJSON geometry for 3D rendering. */
 export async function getBuildingGeometry(
   buildingId: string

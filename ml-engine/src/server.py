@@ -45,6 +45,10 @@ class ProcessParcelRequest(BaseModel):
     height_m: Optional[float] = Field(None, description="Building height in meters if available")
     evidence: Optional[List[Dict[str, Any]]] = Field(None, description="Multi-source evidence list")
     crs: str = Field("EPSG:4326", description="Coordinate Reference System")
+    # Real upstream metadata: OSM `building:levels` etc. Used only to derive a
+    # height when no measured height exists; never fabricated by the engine.
+    floor_count: Optional[int] = Field(None, description="Known/declared floor count from source metadata")
+    height_source: Optional[str] = Field(None, description="Provenance label for the supplied height")
 
 
 class HeightPredictRequest(BaseModel):
@@ -115,7 +119,9 @@ def process_parcel(req: ProcessParcelRequest):
             building_footprint=bld_footprint,
             height_m=req.height_m,
             evidence=req.evidence,
-            crs=req.crs
+            crs=req.crs,
+            floor_count_metadata=req.floor_count,
+            height_source=req.height_source,
         )
         return result
     except Exception as e:

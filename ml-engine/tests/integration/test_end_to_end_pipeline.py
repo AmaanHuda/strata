@@ -64,7 +64,13 @@ def test_full_pipeline_execution_and_schema_compliance(contract_schema):
     assert output["volume_id"].startswith("VOL-MH-MUM-2026-009876")
 
 
-def test_pipeline_handles_unmeasured_height_with_inferred_status(contract_schema):
+def test_pipeline_refuses_to_invent_a_height_without_signal(contract_schema):
+    """No measured height and no level metadata must yield height=None, not 9.0 m.
+
+    This previously returned an invented 9.0 m (a hard-coded three-storey
+    building) that downstream ingestion persisted as though the engine had
+    measured the building.
+    """
     pipeline = MLEnginePipeline(schema_dict=contract_schema)
 
     parcel_coords = [
@@ -78,11 +84,43 @@ def test_pipeline_handles_unmeasured_height_with_inferred_status(contract_schema
     output = pipeline.process_parcel(
         official_ulpin="DL-ND-2026-001234",
         parcel_polygon=parcel_coords,
-        height_m=None,  # Missing height -> heuristic fallback
+        height_m=None,
         crs="EPSG:4326"
     )
 
     assert output["data_status"] == "INFERRED"
-    assert output["height"] is not None  # Estimated height from floor heuristic
-    # Still valid schema-compliant output
+    assert output["height"] is None
+    assert output["floor_count"] is None
+    assert output["review_status"] == "INSUFFICIENT_EVIDENCE"
+    assert any("HEIGHT_UNAVAILABLE" in issue for issue in output["validation"]["issues"])
+    jsonschema.validate(instance=output, schema=contract_schema)
+
+
+def test_pipeline_derives_height_from_real_level_metadata(contract_schema):
+    """A real building:levels tag produces a DERIVED height, flagged as such."""
+    pipeline = MLEnginePipeline(schema_dict=contract_schema)
+
+    parcel_coords = [
+        (72.8324, 18.9211),
+        (72.8337, 18.9211),
+        (72.8337, 18.9227),
+        (72.8324, 18.9227),
+        (72.8324, 18.9211)
+    ]
+
+    output = pipeline.process_parcel(
+        official_ulpin="MH-MUM-001-000001-P-DEADBEEF",
+        parcel_polygon=parcel_coords,
+        height_m=None,
+        floor_count_metadata=6,
+        evidence=[
+            {"source": "OpenStreetMap way/28846517", "type": "other", "reliability": 0.40}
+        ],
+        crs="EPSG:4326"
+    )
+
+    assert output["height"] == pytest.approx(6 * 3.2)
+    assert output["floor_count"] == 6
+    assert output["data_status"] == "INFERRED"
+    assert any("HEIGHT_SOURCE" in issue for issue in output["validation"]["issues"])
     jsonschema.validate(instance=output, schema=contract_schema)

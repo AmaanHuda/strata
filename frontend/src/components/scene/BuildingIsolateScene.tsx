@@ -254,6 +254,22 @@ export function BuildingIsolateScene() {
         >
           <InfoRow icon={<Building2 size={18} />} label="Property Name" value={displayName} />
 
+          {backendStructure?.building_type ? (
+            <InfoRow
+              icon={<Building2 size={18} />}
+              label="Building Type"
+              value={backendStructure.building_type}
+            />
+          ) : null}
+
+          {backendStructure?.is_verified !== undefined && backendStructure !== null ? (
+            <InfoRow
+              icon={<Info size={18} />}
+              label="Verification"
+              value={backendStructure.is_verified ? "Verified" : "Not verified (candidate)"}
+            />
+          ) : null}
+
           {/* ULPIN — strict display */}
           {officialUlpin ? (
             <InfoRow
@@ -372,6 +388,20 @@ export function BuildingIsolateScene() {
                   <div css={css({ fontSize: "0.75rem", color: "#2563EB", fontWeight: 800 })}>
                     {floor.units.length > 0 ? `${floor.units.length} units` : "No units"}
                   </div>
+                  {floor.units.length > 0 && floor.units[0].candidate_ulpin && (
+                    <div
+                      css={css({
+                        fontSize: "0.6rem",
+                        color: "#64748B",
+                        fontWeight: 700,
+                        fontFamily: "monospace",
+                        marginTop: "0.15rem",
+                      })}
+                    >
+                      {floor.units[0].candidate_ulpin}
+                      {floor.units.length > 1 ? ` … (+${floor.units.length - 1})` : ""}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -407,6 +437,14 @@ export function BuildingIsolateScene() {
                   </div>
                 )}
               </>
+            ) : mlVersion ? (
+              // The ML engine ran, but the height/floors on this record came from
+              // the source tags rather than from inference. Saying "ML not used"
+              // here would be untrue, and implying a surveyed height would be too.
+              <div css={css({ fontSize: "0.8rem", color: "#475569", fontWeight: 600 })}>
+                ML engine ran for validation only — height and floors come from the
+                source record, not from inference (no surveyed measurement).
+              </div>
             ) : (
               <div css={css({ fontSize: "0.8rem", color: "#94A3B8", fontWeight: 600, fontStyle: "italic" })}>
                 ML not used — manual/surveyed data

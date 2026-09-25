@@ -17,6 +17,7 @@ from app.api.v1 import (
     datasets,
     floors,
     health,
+    ingest,
     jobs,
     parcels,
     search,
@@ -175,5 +176,6 @@ app.include_router(search.router, prefix=api_v1)
 app.include_router(spatial.router, prefix=api_v1)
 app.include_router(validation.router, prefix=api_v1)
 app.include_router(datasets.router, prefix=api_v1)
+app.include_router(ingest.router, prefix=api_v1)
 app.include_router(jobs.router, prefix=api_v1)
 app.include_router(evidence.router, prefix=api_v1)

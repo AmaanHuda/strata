@@ -22,6 +22,7 @@ from app.schemas.dataset import (
     DatasetRegisterRequest,
     ImportStatusOut,
 )
+from app.services.cadastral_codes import assign_cadastral_codes
 from app.services.dataset import DatasetService
 from app.services.ulpin import ULPINService
 
@@ -155,7 +156,10 @@ async def import_buildings_geojson(
     ulpins_generated = 0
     skipped = 0
 
-    state_code = (state or "IN")[:2].upper().ljust(2, "X")
+    # Only used to build a human-readable default parcel number below. It is
+    # NOT used for ULPIN segments any more — the natural key `PARCEL-<xx>-nnnnn`
+    # must stay stable or re-importing would create duplicate parcels. ULPIN code
+    # segments come from assign_cadastral_codes() instead.
     district_code = (district or "00")[:2].upper().ljust(2, "0")
 
     for idx, feature in enumerate(features):
@@ -282,13 +286,27 @@ async def import_buildings_geojson(
         )
 
         # Candidate (NON-AUTHORITATIVE) identifiers so the sidebar has ULPINs to show.
-        parcel.candidate_ulpin = ULPINService.generate_parcel_ulpin(
-            state=state_code,
-            district=district_code,
+        #
+        # The code segments go through the shared assigner rather than raw string
+        # slicing: slicing produced identifiers such as `MA-MU-AND-KURLA0-P-...`
+        # (letters where the candidate format requires digits), which
+        # /api/v1/ulpin/validate then classified as syntactically INVALID. Existing
+        # rows are left untouched; this corrects every new import.
+        codes = assign_cadastral_codes(
+            state=state,
+            district=district,
             taluk=taluk,
             village=village_name,
+        )
+        parcel.candidate_ulpin = ULPINService.generate_parcel_ulpin(
+            state=codes.state_code,
+            district=codes.district_code,
+            taluk=codes.taluk_code,
+            village=codes.village_code,
             survey_number=parcel_number,
         )
+        if isinstance(parcel.metadata_, dict):
+            parcel.metadata_ = {**parcel.metadata_, "cadastral_codes": codes.as_metadata()}
         # Derive the building identifier from its cadastral parent (the parcel's
         # candidate ULPIN), exactly like the ML ingestion pipeline. The internal
         # UUID is never embedded in a value presented as a ULPIN.

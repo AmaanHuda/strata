@@ -23,9 +23,15 @@ from app.schemas.ulpin import ULPINGenerateRequest, ULPINValidateResponse
 # Standard official Bhu-Aadhaar ULPIN pattern (14 alphanumeric characters)
 OFFICIAL_ULPIN_REGEX = re.compile(r"^[A-Z0-9]{14}$")
 
-# Candidate ULPIN pattern
+# Candidate ULPIN pattern.
+# The optional suffixes mirror the cadastral hierarchy this system actually
+# generates: -B<n> building (parcel -> building), -F<n> floor, -U<n> unit.
+# The building suffix was previously missing, so a real building candidate ULPIN
+# (e.g. MH-30-530-148925-P-D8CA0267-B1) was misclassified as INVALID by
+# validate_ulpin() even though the database and ingestion path produce it.
 CANDIDATE_ULPIN_REGEX = re.compile(
-    r"^(CAND-[A-Z0-9\-]+|[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{6}-[PBFU]-[A-Z0-9]+(?:-F-?[0-9]+)?(?:-U[A-Z0-9]+)?)$"
+    r"^(CAND-[A-Z0-9\-]+|[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{6}-[PBFU]-[A-Z0-9]+"
+    r"(?:-B-?[0-9]+)?(?:-F-?[0-9]+)?(?:-U[A-Z0-9]+)?)$"
 )
 
 

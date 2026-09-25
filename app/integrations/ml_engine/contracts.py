@@ -224,6 +224,10 @@ class MLProcessParcelRequest(BaseModel):
     height_m: Optional[float] = Field(None, description="Building height in meters if available")
     evidence: Optional[List[Dict[str, Any]]] = Field(None, description="Multi-source evidence list")
     crs: str = Field("EPSG:4326", description="Coordinate Reference System")
+    # Real upstream metadata (e.g. the OSM `building:levels` tag). Lets the ML
+    # engine derive a height from a genuine source signal instead of inventing one.
+    floor_count: Optional[int] = Field(None, description="Declared floor count from source metadata")
+    height_source: Optional[str] = Field(None, description="Provenance label for the supplied height")
 
 
 # Master ML Ingestion Schema (legacy batch ingestion payload)
