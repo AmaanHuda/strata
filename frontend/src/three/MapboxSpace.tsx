@@ -11,7 +11,7 @@ import {
   getBuildingGeometry,
 } from "@/api/strataBackend";
 
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 
 interface MapboxSpaceProps {
   isVisible: boolean;
@@ -32,6 +32,12 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
   );
   const setIsFetchingBackendBuilding = useAreaStore(
     (state) => state.setIsFetchingBackendBuilding
+  );
+  const setBackendLookupDone = useAreaStore(
+    (state) => state.setBackendLookupDone
+  );
+  const setBackendFoundData = useAreaStore(
+    (state) => state.setBackendFoundData
   );
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null);
 
@@ -120,9 +126,11 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           },
         };
 
-    // Clear previous backend data
+    // Clear previous backend data and reset lookup tracking flags
     setBackendBuildingStructure(null);
     setBackendBuildingGeometry(null);
+    setBackendLookupDone(false);
+    setBackendFoundData(false);
 
     // Show sidebar immediately with Mapbox info, then enrich with backend
     setSelectedBuildingDetail(mapboxInfo);
@@ -135,6 +143,8 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
       const lookup = await pointLookup(lngLat.lat, lngLat.lng);
 
       if (lookup?.building) {
+        // Mark backend as having returned data before any async calls
+        setBackendFoundData(true);
         const backendBuildingId = lookup.building.id;
 
         // 2. Fetch real structure (floors, units, ULPIN, ML provenance)
@@ -152,19 +162,24 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           ...mapboxInfo,
           // Use backend building ID as the canonical id
           id: backendBuildingId,
-          name: structure?.building_name || mapboxInfo.name || "Building",
-          height: geometry?.height_m ?? structure?.height_m ?? mapboxInfo.height,
-          floors: structure?.floor_count ?? mapboxInfo.floors,
+          name: structure?.building_name || lookup.building.identifier || mapboxInfo.name || "Building",
+          height: geometry?.height_m ?? structure?.height_m ?? lookup.building.height_m ?? mapboxInfo.height,
+          floors: structure?.floor_count ?? lookup.building.floor_count ?? mapboxInfo.floors,
           // Flats = total units from backend; 0 means genuinely 0 or unavailable
-          flats: structure?.floors.reduce((acc, f) => acc + f.units.length, 0) ?? 0,
+          flats: structure?.floors
+            ? structure.floors.reduce((acc, f) => acc + f.units.length, 0)
+            : (lookup.units_count ?? 0),
           // These fields have no real backend equivalent — show "Not available" in UI
           occupancy: "Not available",
           energyRating: "N/A",
-          area: geometry?.bounds
-            ? 0  // area will be read from structure.footprint_area_sqm in sidebar
-            : mapboxInfo.area,
+          area: structure?.footprint_area_sqm
+            ? Number(structure.footprint_area_sqm)
+            : lookup.building.area_sqm
+              ? Number(lookup.building.area_sqm)
+              : mapboxInfo.area,
           // Use real geometry from backend if available, else keep Mapbox geometry
           geometry: (geometry?.footprint_geojson as { type: string; coordinates: unknown } | null)
+            ?? (lookup.building.geometry_geojson as { type: string; coordinates: unknown } | null)
             ?? mapboxInfo.geometry,
           address: structure?.address ?? mapboxInfo.address,
           dataSource: structure?.provenance?.ml_derived
@@ -172,14 +187,15 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
             : "STRATA Backend · PostGIS",
           isStructure: true,
           // Centroid from backend
-          lat: geometry?.centroid?.lat ?? lngLat.lat,
-          lng: geometry?.centroid?.lon ?? lngLat.lng,
+          lat: geometry?.centroid?.lat ?? lookup.building.centroid?.lat ?? lngLat.lat,
+          lng: geometry?.centroid?.lon ?? lookup.building.centroid?.lon ?? lngLat.lng,
         };
 
         setSelectedBuildingDetail(enriched);
         setSelectedBuilding(enriched);
       } else if (lookup?.parcel) {
         // Parcel found but no building in backend at this point
+        setBackendFoundData(true);
         const enrichedParcel: BuildingInfo = {
           ...mapboxInfo,
           id: lookup.parcel.id,
@@ -192,6 +208,10 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
           height: 0,
           occupancy: "Not available",
           energyRating: "N/A",
+          area: lookup.parcel.area_sqm ? Number(lookup.parcel.area_sqm) : mapboxInfo.area,
+          geometry: (lookup.parcel.geometry_geojson as { type: string; coordinates: unknown } | null) ?? mapboxInfo.geometry,
+          lat: lookup.parcel.centroid?.lat ?? lngLat.lat,
+          lng: lookup.parcel.centroid?.lon ?? lngLat.lng,
           dataSource: "STRATA Backend · PostGIS",
         };
         setSelectedBuildingDetail(enrichedParcel);
@@ -199,13 +219,15 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
         setBackendBuildingStructure(null);
         setBackendBuildingGeometry(null);
       }
-      // If lookup returns nothing: backend has no data at this point, keep Mapbox info
+      // lookup returned null or empty: backend has no spatial record at this point.
+      // Keep Mapbox info but mark lookup as done with no data found.
     } catch {
       // Backend unreachable — keep Mapbox info, don't fabricate backend data
       setBackendBuildingStructure(null);
       setBackendBuildingGeometry(null);
     } finally {
       setIsFetchingBackendBuilding(false);
+      setBackendLookupDone(true);
     }
   };
 

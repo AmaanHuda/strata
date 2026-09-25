@@ -22,8 +22,11 @@ export function BuildingIsolateScene() {
   const backendStructure = useAreaStore((state) => state.backendBuildingStructure);
   const backendGeometry = useAreaStore((state) => state.backendBuildingGeometry);
   const isFetching = useAreaStore((state) => state.isFetchingBackendBuilding);
+  const backendLookupDone = useAreaStore((state) => state.backendLookupDone);
+  const backendFoundData = useAreaStore((state) => state.backendFoundData);
   const setAppStep = useAreaStore((state) => state.setAppStep);
   const [extractedFloor, setExtractedFloor] = useState(0);
+
 
   const handleBack = () => {
     setAppStep(1);
@@ -412,8 +415,8 @@ export function BuildingIsolateScene() {
           </div>
         )}
 
-        {/* Disclaimer if no backend data */}
-        {!backendStructure && !isFetching && (
+        {/* Disclaimer if no backend data — only shown AFTER lookup completes with no result */}
+        {backendLookupDone && !backendFoundData && !backendStructure && !isFetching && (
           <div
             css={css({
               display: "flex",
@@ -434,6 +437,7 @@ export function BuildingIsolateScene() {
             No backend record found at this location. 3D view uses Mapbox geometry. Property data is unavailable.
           </div>
         )}
+
 
         {/* Floor Extraction Control */}
         <div

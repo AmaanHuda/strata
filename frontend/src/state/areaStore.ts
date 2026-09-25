@@ -16,6 +16,17 @@ type AreaStore = {
   backendBuildingGeometry: BuildingGeometry | null;
   /** True while fetching backend building data after a map click. */
   isFetchingBackendBuilding: boolean;
+  /**
+   * True once the backend point-lookup has completed (regardless of whether
+   * it found anything). Reset to false on every new map click so the "No
+   * backend record" disclaimer never shows while a lookup is pending.
+   */
+  backendLookupDone: boolean;
+  /**
+   * True if the backend lookup returned at least a parcel OR a building for
+   * the clicked coordinate. Used to suppress the false-positive disclaimer.
+   */
+  backendFoundData: boolean;
 
   appendAreas: (areas: any[]) => void;
   setCenter: (center: any[]) => void;
@@ -24,6 +35,8 @@ type AreaStore = {
   setBackendBuildingStructure: (structure: BuildingStructure | null) => void;
   setBackendBuildingGeometry: (geometry: BuildingGeometry | null) => void;
   setIsFetchingBackendBuilding: (val: boolean) => void;
+  setBackendLookupDone: (val: boolean) => void;
+  setBackendFoundData: (val: boolean) => void;
 };
 
 export const useAreaStore = create<AreaStore>((set) => ({
@@ -43,6 +56,8 @@ export const useAreaStore = create<AreaStore>((set) => ({
   backendBuildingStructure: null,
   backendBuildingGeometry: null,
   isFetchingBackendBuilding: false,
+  backendLookupDone: false,
+  backendFoundData: false,
   appendAreas: (areas) => set(() => ({ areas: [...areas] })),
   setCenter: (center) => set(() => ({ center: [...center] })),
   setAppStep: (step) => set(() => ({ appStep: step })),
@@ -50,4 +65,7 @@ export const useAreaStore = create<AreaStore>((set) => ({
   setBackendBuildingStructure: (structure) => set(() => ({ backendBuildingStructure: structure })),
   setBackendBuildingGeometry: (geometry) => set(() => ({ backendBuildingGeometry: geometry })),
   setIsFetchingBackendBuilding: (val) => set(() => ({ isFetchingBackendBuilding: val })),
+  setBackendLookupDone: (val) => set(() => ({ backendLookupDone: val })),
+  setBackendFoundData: (val) => set(() => ({ backendFoundData: val })),
 }));
+

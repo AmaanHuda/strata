@@ -438,11 +438,106 @@ async def point_lookup(
     _user: User = Depends(get_current_user),
 ):
     """
-    Point lookup: Returns the containing land parcel, building, and vertical unit counts.
+    Point lookup: Returns the containing or nearest land parcel, building, and vertical unit counts.
+    Uses PostGIS spatial index with ST_Intersects and geodesic distance tolerance to account for 3D map click projection.
     """
     point = ST_SetSRID(ST_Point(lon, lat), 4326)
+    point_geog = func.cast(point, func.geography)
 
-    # 1. Containing Parcel
+    # 1. Building Lookup (Direct intersection first, then within tolerance)
+    b_stmt = (
+        select(
+            Building.id,
+            Building.parcel_id,
+            Building.building_name,
+            Building.official_ulpin,
+            Building.candidate_ulpin,
+            Building.status,
+            Building.height_m,
+            Building.floor_count,
+            Building.footprint_area_sqm,
+            ST_AsGeoJSON(Building.footprint_2d).label("geojson"),
+            ST_AsGeoJSON(ST_Centroid(Building.footprint_2d)).label("centroid_geojson"),
+        )
+        .where(
+            Building.is_active == True,
+            Building.footprint_2d.is_not(None),
+            ST_Intersects(Building.footprint_2d, point),
+        )
+        .limit(1)
+    )
+    b_res = await db.execute(b_stmt)
+    b_row = b_res.first()
+
+    matched_parcel_id = None
+    building_item = None
+    floors_count = 0
+    units_count = 0
+
+    if b_row:
+        b_id, b_pid, b_name, off_u, cand_u, status_, height, floors, area, geo_str, cent_str = b_row
+        matched_parcel_id = b_pid
+        building_item = SpatialEntityItem(
+            id=b_id,
+            entity_type="building",
+            identifier=b_name or f"Building-{str(b_id)[:8]}",
+            official_ulpin=off_u,
+            candidate_ulpin=cand_u,
+            status=status_,
+            area_sqm=float(area) if area else None,
+            height_m=height,
+            floor_count=floors,
+            geometry_geojson=json.loads(geo_str) if geo_str else None,
+            centroid=_extract_centroid_coords(cent_str),
+        )
+    else:
+        # Check within 20m tolerance for 3D perspective / offset clicks
+        bld_geog = func.cast(Building.footprint_2d, func.geography)
+        dist_expr = ST_Distance(bld_geog, point_geog)
+        b_near_stmt = (
+            select(
+                Building.id,
+                Building.parcel_id,
+                Building.building_name,
+                Building.official_ulpin,
+                Building.candidate_ulpin,
+                Building.status,
+                Building.height_m,
+                Building.floor_count,
+                Building.footprint_area_sqm,
+                ST_AsGeoJSON(Building.footprint_2d).label("geojson"),
+                ST_AsGeoJSON(ST_Centroid(Building.footprint_2d)).label("centroid_geojson"),
+                dist_expr.label("dist"),
+            )
+            .where(
+                Building.is_active == True,
+                Building.footprint_2d.is_not(None),
+                ST_DWithin(bld_geog, point_geog, 50.0),
+            )
+            .order_by(dist_expr)
+            .limit(1)
+        )
+        b_near_res = await db.execute(b_near_stmt)
+        b_near_row = b_near_res.first()
+        if b_near_row:
+            b_id, b_pid, b_name, off_u, cand_u, status_, height, floors, area, geo_str, cent_str, _ = b_near_row
+            matched_parcel_id = b_pid
+            building_item = SpatialEntityItem(
+                id=b_id,
+                entity_type="building",
+                identifier=b_name or f"Building-{str(b_id)[:8]}",
+                official_ulpin=off_u,
+                candidate_ulpin=cand_u,
+                status=status_,
+                area_sqm=float(area) if area else None,
+                height_m=height,
+                floor_count=floors,
+                geometry_geojson=json.loads(geo_str) if geo_str else None,
+                centroid=_extract_centroid_coords(cent_str),
+            )
+
+    # 2. Containing / Associated Parcel
+    parcel_item = None
     p_stmt = (
         select(
             Parcel.id,
@@ -457,13 +552,13 @@ async def point_lookup(
         .where(
             Parcel.is_active == True,
             Parcel.geometry_2d.is_not(None),
-            ST_Contains(Parcel.geometry_2d, point),
+            ST_Intersects(Parcel.geometry_2d, point),
         )
         .limit(1)
     )
     p_res = await db.execute(p_stmt)
     p_row = p_res.first()
-    parcel_item = None
+
     if p_row:
         p_id, p_num, off_u, cand_u, status_, area, geo_str, cent_str = p_row
         parcel_item = SpatialEntityItem(
@@ -477,53 +572,125 @@ async def point_lookup(
             geometry_geojson=json.loads(geo_str) if geo_str else None,
             centroid=_extract_centroid_coords(cent_str),
         )
-
-    # 2. Containing Building
-    b_stmt = (
-        select(
-            Building.id,
-            Building.building_name,
-            Building.official_ulpin,
-            Building.candidate_ulpin,
-            Building.status,
-            Building.height_m,
-            Building.floor_count,
-            Building.footprint_area_sqm,
-            ST_AsGeoJSON(Building.footprint_2d).label("geojson"),
-            ST_AsGeoJSON(ST_Centroid(Building.footprint_2d)).label("centroid_geojson"),
+    elif matched_parcel_id:
+        # If building was found, look up parent parcel
+        p_by_id_stmt = (
+            select(
+                Parcel.id,
+                Parcel.parcel_number,
+                Parcel.official_ulpin,
+                Parcel.candidate_ulpin,
+                Parcel.status,
+                Parcel.area_sqm,
+                ST_AsGeoJSON(Parcel.geometry_2d).label("geojson"),
+                ST_AsGeoJSON(ST_Centroid(Parcel.geometry_2d)).label("centroid_geojson"),
+            )
+            .where(
+                Parcel.id == matched_parcel_id,
+                Parcel.is_active == True,
+            )
+            .limit(1)
         )
-        .where(
-            Building.is_active == True,
-            Building.footprint_2d.is_not(None),
-            ST_Contains(Building.footprint_2d, point),
+        p_by_id_res = await db.execute(p_by_id_stmt)
+        p_by_id_row = p_by_id_res.first()
+        if p_by_id_row:
+            p_id, p_num, off_u, cand_u, status_, area, geo_str, cent_str = p_by_id_row
+            parcel_item = SpatialEntityItem(
+                id=p_id,
+                entity_type="parcel",
+                identifier=p_num,
+                official_ulpin=off_u,
+                candidate_ulpin=cand_u,
+                status=status_,
+                area_sqm=float(area) if area else None,
+                geometry_geojson=json.loads(geo_str) if geo_str else None,
+                centroid=_extract_centroid_coords(cent_str),
+            )
+    else:
+        # Check within 20m tolerance
+        pcl_geog = func.cast(Parcel.geometry_2d, func.geography)
+        p_dist_expr = ST_Distance(pcl_geog, point_geog)
+        p_near_stmt = (
+            select(
+                Parcel.id,
+                Parcel.parcel_number,
+                Parcel.official_ulpin,
+                Parcel.candidate_ulpin,
+                Parcel.status,
+                Parcel.area_sqm,
+                ST_AsGeoJSON(Parcel.geometry_2d).label("geojson"),
+                ST_AsGeoJSON(ST_Centroid(Parcel.geometry_2d)).label("centroid_geojson"),
+                p_dist_expr.label("dist"),
+            )
+            .where(
+                Parcel.is_active == True,
+                Parcel.geometry_2d.is_not(None),
+                ST_DWithin(pcl_geog, point_geog, 50.0),
+            )
+            .order_by(p_dist_expr)
+            .limit(1)
         )
-        .limit(1)
-    )
-    b_res = await db.execute(b_stmt)
-    b_row = b_res.first()
-    building_item = None
-    floors_count = 0
-    units_count = 0
+        p_near_res = await db.execute(p_near_stmt)
+        p_near_row = p_near_res.first()
+        if p_near_row:
+            p_id, p_num, off_u, cand_u, status_, area, geo_str, cent_str, _ = p_near_row
+            parcel_item = SpatialEntityItem(
+                id=p_id,
+                entity_type="parcel",
+                identifier=p_num,
+                official_ulpin=off_u,
+                candidate_ulpin=cand_u,
+                status=status_,
+                area_sqm=float(area) if area else None,
+                geometry_geojson=json.loads(geo_str) if geo_str else None,
+                centroid=_extract_centroid_coords(cent_str),
+            )
 
-    if b_row:
-        b_id, b_name, off_u, cand_u, status_, height, floors, area, geo_str, cent_str = b_row
-        building_item = SpatialEntityItem(
-            id=b_id,
-            entity_type="building",
-            identifier=b_name or f"Building-{str(b_id)[:8]}",
-            official_ulpin=off_u,
-            candidate_ulpin=cand_u,
-            status=status_,
-            area_sqm=float(area) if area else None,
-            height_m=height,
-            floor_count=floors,
-            geometry_geojson=json.loads(geo_str) if geo_str else None,
-            centroid=_extract_centroid_coords(cent_str),
+    # 3. If parcel was found but no building yet, check for buildings located on this parcel
+    if parcel_item and not building_item:
+        b_on_p_stmt = (
+            select(
+                Building.id,
+                Building.parcel_id,
+                Building.building_name,
+                Building.official_ulpin,
+                Building.candidate_ulpin,
+                Building.status,
+                Building.height_m,
+                Building.floor_count,
+                Building.footprint_area_sqm,
+                ST_AsGeoJSON(Building.footprint_2d).label("geojson"),
+                ST_AsGeoJSON(ST_Centroid(Building.footprint_2d)).label("centroid_geojson"),
+            )
+            .where(
+                Building.parcel_id == parcel_item.id,
+                Building.is_active == True,
+            )
+            .limit(1)
         )
+        b_on_p_res = await db.execute(b_on_p_stmt)
+        b_on_p_row = b_on_p_res.first()
+        if b_on_p_row:
+            b_id, b_pid, b_name, off_u, cand_u, status_, height, floors, area, geo_str, cent_str = b_on_p_row
+            building_item = SpatialEntityItem(
+                id=b_id,
+                entity_type="building",
+                identifier=b_name or f"Building-{str(b_id)[:8]}",
+                official_ulpin=off_u,
+                candidate_ulpin=cand_u,
+                status=status_,
+                area_sqm=float(area) if area else None,
+                height_m=height,
+                floor_count=floors,
+                geometry_geojson=json.loads(geo_str) if geo_str else None,
+                centroid=_extract_centroid_coords(cent_str),
+            )
 
-        # Count floors and units
+    # 4. Vertical Unit and Floor Counts
+    if building_item:
+        b_id = building_item.id
         fl_res = await db.execute(select(func.count(Floor.id)).where(Floor.building_id == b_id, Floor.is_active == True))
-        floors_count = fl_res.scalar() or 0
+        fl_count = fl_res.scalar() or 0
 
         un_res = await db.execute(
             select(func.count(Unit.id))
@@ -531,6 +698,7 @@ async def point_lookup(
             .where(Floor.building_id == b_id, Unit.is_active == True)
         )
         units_count = un_res.scalar() or 0
+        floors_count = fl_count or (building_item.floor_count or 0)
 
     return ApiResponse(
         data=PointLookupResponse(
