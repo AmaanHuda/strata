@@ -41,6 +41,11 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
   const setBackendFoundData = useAreaStore(
     (state) => state.setBackendFoundData
   );
+  const setSelectedFloorId = useAreaStore((state) => state.setSelectedFloorId);
+  const setSelectedUnitId = useAreaStore((state) => state.setSelectedUnitId);
+  const backendBuildingStructure = useAreaStore(
+    (state) => state.backendBuildingStructure
+  );
   const [selectedBuilding, setSelectedBuilding] = useState<BuildingInfo | null>(null);
   // Set when the currently selected entity is a real backend record, which is the
   // only case where we are allowed to draw our own 3D geometry over the basemap.
@@ -191,11 +196,14 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
     // record for this location — so the sidebar never claims Mapbox data is ours.
     mapboxInfo.dataSource = "Mapbox (preview only) — no backend record";
 
-    // Clear previous backend data and reset lookup tracking flags
+    // Clear previous backend data and reset lookup tracking flags. The vertical
+    // selection belongs to the previous building, so it is cleared with it.
     setBackendBuildingStructure(null);
     setBackendBuildingGeometry(null);
     setBackendLookupDone(false);
     setBackendFoundData(false);
+    setSelectedFloorId(null);
+    setSelectedUnitId(null);
 
     // Show sidebar immediately with Mapbox info, then enrich with backend
     setSelectedBuildingDetail(mapboxInfo);
@@ -543,6 +551,20 @@ export function MapboxSpace({ isVisible }: MapboxSpaceProps) {
         >
           3D isolation · {isolatedBuilding.label} · {isolatedBuilding.heightM.toFixed(1)} m ·{" "}
           {isolatedBuilding.floors} floors · real PostGIS record
+          {backendBuildingStructure?.three_d_ulpin ? (
+            <div
+              style={{
+                marginTop: "0.35rem",
+                fontFamily: "monospace",
+                fontSize: "10px",
+                fontWeight: 700,
+                color: "#7C3AED",
+                wordBreak: "break-all",
+              }}
+            >
+              3D ULPIN (SYSTEM GENERATED): {backendBuildingStructure.three_d_ulpin}
+            </div>
+          ) : null}
         </div>
       )}
     </div>

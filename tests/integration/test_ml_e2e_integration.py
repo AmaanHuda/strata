@@ -9,7 +9,8 @@ Validates the full cycle:
 5. MLAdapter persists validated entities with full ML metadata in database
 6. Preserves all 13 ML metadata attributes (geometry, CRS, height, floor_count, confidence,
    uncertainty, evidence, validation, review_status, data_status, model_version, dataset_version, provenance)
-7. ULPIN rule is strictly adhered to: official_ulpin is NOT fabricated; candidate volume_id is stored in candidate_ulpin
+7. ULPIN rule is strictly adhered to: official_ulpin is NOT fabricated and the ML volume_id
+   is PROVENANCE ONLY (metadata_["volume_id"]) — it is never used as a ULPIN
 8. No fake default ML values are introduced (no 0.85/0.80/3.0m).
 """
 import json
@@ -90,7 +91,9 @@ async def test_end_to_end_backend_ml_integration():
 
         # Check ULPIN Rule
         assert result["official_ulpin"] == "MH-MUM-2026-009876"  # Preserved from parcel, not modified
-        assert result["candidate_ulpin"].startswith("VOL-MH-MUM-2026-009876")  # Candidate volume ID
+        # The ML volume_id is provenance, not an identifier: nothing is minted here.
+        assert result["candidate_ulpin"] is None
+        assert result["metadata"]["volume_id"].startswith("VOL-")
 
         # 6. Verify Persisted Database Entities
         bld_id = uuid.UUID(result["building_id"])
@@ -129,7 +132,9 @@ async def test_end_to_end_backend_ml_integration():
         units = [v for v in store.entities.values() if isinstance(v, Unit)]
         assert len(units) >= 1
         assert units[0].unit_number == "U-001"
-        assert units[0].candidate_ulpin.startswith("VOL-")
+        # No ULPIN is derived from the ML volume_id (provenance only).
+        assert units[0].candidate_ulpin is None
+        assert units[0].metadata_["volume_id"].startswith("VOL-")
 
     finally:
         settings.ML_ENGINE_ENABLED = original_enabled
@@ -171,7 +176,8 @@ async def test_end_to_end_ml_api_endpoint(client_with_auth):
         assert data["height_m"] == 12.0
         assert data["floor_count"] == 4
         assert data["official_ulpin"] is None  # ULPIN rule: official_ulpin not fabricated!
-        assert data["candidate_ulpin"].startswith("VOL-")
+        assert data["candidate_ulpin"] is None  # volume_id is provenance, not a ULPIN
+        assert data["metadata"]["volume_id"].startswith("VOL-")
         assert data["metadata"]["review_status"] in ["APPROVED", "REVIEW_REQUIRED"]
 
     finally:

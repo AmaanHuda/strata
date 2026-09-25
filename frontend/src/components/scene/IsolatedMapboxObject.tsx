@@ -4,9 +4,21 @@ import type { BuildingInfo } from "@/components/panels/BuildingSidebar";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
+type IsolatedFloorRef = {
+  id: string;
+  floor_number: number;
+  label?: string | null;
+};
+
 type IsolatedMapboxObjectProps = {
   info: BuildingInfo;
   extractedFloor: number;
+  /** Real backend floors, ordered bottom-up, so a clicked extrusion maps to a floor id. */
+  floors?: IsolatedFloorRef[];
+  /** Index into `floors` of the currently selected floor (-1 for none). */
+  selectedFloorIndex?: number;
+  /** Called with the clicked floor id, or null when empty space is clicked. */
+  onSelectFloor?: (floorId: string | null) => void;
 };
 
 function collectCoordinates(value: unknown, output: [number, number][]) {
@@ -42,7 +54,13 @@ function getBounds(geometry: BuildingInfo["geometry"]) {
   return [[minLng, minLat], [maxLng, maxLat]] as [[number, number], [number, number]];
 }
 
-export function IsolatedMapboxObject({ info, extractedFloor }: IsolatedMapboxObjectProps) {
+export function IsolatedMapboxObject({
+  info,
+  extractedFloor,
+  floors,
+  selectedFloorIndex = -1,
+  onSelectFloor,
+}: IsolatedMapboxObjectProps) {
   const mapRef = useRef<MapRef>(null);
   const [isModelReady, setIsModelReady] = useState(false);
   const validLng = typeof info.lng === "number" && Number.isFinite(info.lng);
@@ -112,6 +130,25 @@ export function IsolatedMapboxObject({ info, extractedFloor }: IsolatedMapboxObj
       mapStyle="mapbox://styles/mapbox/standard"
       style={{ width: "100%", height: "100%" }}
       terrain={{ source: "isolate-dem", exaggeration: 1 }}
+      onClick={(event) => {
+        if (!onSelectFloor) return;
+        const map = mapRef.current?.getMap();
+        if (!map) return;
+        // Query by prefix rather than by layer name: asking for a layer that has
+        // not been created yet would throw. This keeps the fallback safe.
+        const hits = map.queryRenderedFeatures(event.point);
+        const hit = hits.find((f) => String(f.layer?.id || "").startsWith("selected-floor-"));
+        if (!hit) {
+          onSelectFloor(null);
+          return;
+        }
+        const match = String(hit.layer?.id || "").match(/selected-floor-(\d+)/);
+        const index = match ? Number(match[1]) : -1;
+        const floor = index >= 0 ? floors?.[index] : undefined;
+        // No backend floor at that index (e.g. floors are unknown) -> clear instead
+        // of inventing an identifier.
+        onSelectFloor(floor ? floor.id : null);
+      }}
       minPitch={20}
       maxPitch={85}
       attributionControl={false}
@@ -153,9 +190,14 @@ export function IsolatedMapboxObject({ info, extractedFloor }: IsolatedMapboxObj
         {Array.from({ length: floorCount }, (_, index) => {
           const firstExtractedFloor = floorCount - extractedFloor;
           const isExtracted = extractedFloor > 0 && index >= firstExtractedFloor;
+          const isSelected = index === selectedFloorIndex;
+          // Smooth, additive lift: extracted floors keep their gap, and the clicked
+          // floor is nudged out so it stays part of the building but is isolated.
           const lifted = isExtracted
             ? (index - firstExtractedFloor + 1) * extractionGap
-            : 0;
+            : isSelected
+              ? 1.5
+              : 0;
           const base = index * floorHeight + lifted;
           return (
             <Layer
@@ -164,10 +206,14 @@ export function IsolatedMapboxObject({ info, extractedFloor }: IsolatedMapboxObj
               type="fill-extrusion"
               slot="top"
               paint={{
-                "fill-extrusion-color": isExtracted ? "#93C5FD" : info.mapColor || "#CBD5E1",
+                "fill-extrusion-color": isSelected
+                  ? "#F59E0B"
+                  : isExtracted
+                    ? "#93C5FD"
+                    : info.mapColor || "#CBD5E1",
                 "fill-extrusion-base": base,
                 "fill-extrusion-height": base + Math.max(0.12, floorHeight - 0.08),
-                "fill-extrusion-opacity": 0.96,
+                "fill-extrusion-opacity": isSelected ? 1 : 0.9,
                 "fill-extrusion-vertical-gradient": true,
               }}
             />

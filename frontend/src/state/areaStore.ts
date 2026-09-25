@@ -27,6 +27,12 @@ type AreaStore = {
    * the clicked coordinate. Used to suppress the false-positive disclaimer.
    */
   backendFoundData: boolean;
+  /**
+   * Vertical selection, synchronized between the 3D viewer, the floor list and
+   * the information panel. Ids are real backend floor/unit ids — never invented.
+   */
+  selectedFloorId: string | null;
+  selectedUnitId: string | null;
 
   appendAreas: (areas: any[]) => void;
   setCenter: (center: any[]) => void;
@@ -37,6 +43,10 @@ type AreaStore = {
   setIsFetchingBackendBuilding: (val: boolean) => void;
   setBackendLookupDone: (val: boolean) => void;
   setBackendFoundData: (val: boolean) => void;
+  setSelectedFloorId: (id: string | null) => void;
+  setSelectedUnitId: (id: string | null) => void;
+  /** Clear the vertical selection (click on empty space / new building). */
+  clearFloorUnitSelection: () => void;
 };
 
 export const useAreaStore = create<AreaStore>((set) => ({
@@ -58,6 +68,8 @@ export const useAreaStore = create<AreaStore>((set) => ({
   isFetchingBackendBuilding: false,
   backendLookupDone: false,
   backendFoundData: false,
+  selectedFloorId: null,
+  selectedUnitId: null,
   appendAreas: (areas) => set(() => ({ areas: [...areas] })),
   setCenter: (center) => set(() => ({ center: [...center] })),
   setAppStep: (step) => set(() => ({ appStep: step })),
@@ -67,5 +79,9 @@ export const useAreaStore = create<AreaStore>((set) => ({
   setIsFetchingBackendBuilding: (val) => set(() => ({ isFetchingBackendBuilding: val })),
   setBackendLookupDone: (val) => set(() => ({ backendLookupDone: val })),
   setBackendFoundData: (val) => set(() => ({ backendFoundData: val })),
+  setSelectedFloorId: (id) => set(() => ({ selectedFloorId: id })),
+  setSelectedUnitId: (id) => set(() => ({ selectedUnitId: id })),
+  clearFloorUnitSelection: () =>
+    set(() => ({ selectedFloorId: null, selectedUnitId: null })),
 }));
 

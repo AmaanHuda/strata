@@ -32,7 +32,10 @@ class MLDataMapper:
         validation, review_status, data_status, model_version, dataset_version, provenance_id, generated_at.
         
         Strictly observes the ULPIN rule: official_ulpin is only set if externally provided/verified.
-        Candidate volume_id is stored in candidate_ulpin and metadata_["volume_id"].
+        The ML ``volume_id`` is stored as PROVENANCE ONLY (metadata_["volume_id"]) and is
+        explicitly NOT used as any ULPIN. Identifiers for these entities come from the
+        deterministic 3D ULPIN service (app/services/ulpin_3d.py) or the legacy cadastral
+        parent chain — never from a per-run ML volume id.
         """
         # Convert GeoJSON geometry to WKT
         footprint_wkt = None
@@ -83,7 +86,9 @@ class MLDataMapper:
             "uncertainty_range_m": output.uncertainty,
             "floor_count": output.floor_count,
             "official_ulpin": official_ulpin,  # strictly preserved, never fabricated
-            "candidate_ulpin": output.volume_id,  # non-authoritative candidate ID
+            # No ULPIN is minted here: the ML volume_id is a per-run provenance token,
+            # not an identifier. The 3D ULPIN service assigns the deterministic ID.
+            "candidate_ulpin": None,
             "status": bld_status,
             "ml_derived": True,
             "ml_model_version": output.model_version,
@@ -106,7 +111,9 @@ class MLDataMapper:
                 "ceiling_height_m": ceiling_h,
                 "floor_area_sqm": None,
                 "official_ulpin": None,
-                "candidate_ulpin": f"{output.volume_id}-FL{f_num:02d}" if output.volume_id else None,
+                # Floor identity is the derived floor code, assigned by the 3D ULPIN
+                # service; the ML volume_id must not be smuggled in as an identifier.
+                "candidate_ulpin": None,
                 "status": bld_status,
                 "ml_derived": True,
                 "ml_confidence_score": output.confidence,
@@ -138,7 +145,7 @@ class MLDataMapper:
                 "area_sqm": None,
                 "volume_cum": None,
                 "official_ulpin": None,
-                "candidate_ulpin": output.volume_id,
+                "candidate_ulpin": None,  # provenance-only volume_id, never an identifier
                 "status": bld_status,
                 "ml_derived": True,
                 "ml_confidence_score": output.confidence,

@@ -527,6 +527,21 @@ class OnDemandIngestService:
         await self.db.commit()
         await self.db.refresh(building)
 
+        # 12. Deterministic 3D ULPINs (SYSTEM GENERATED, 3D_GEOMETRY_HASH_V1) for
+        #     the hierarchy just persisted. Best-effort and honest: only real
+        #     geometry + real vertical information produce an identifier, so an
+        #     OSM footprint without a height simply gets none (never a fake one).
+        try:
+            from app.services.ulpin_3d import ULPIN3DService
+
+            await ULPIN3DService(self.db).sync_building(building.id, created_by=user.id)
+        except Exception as exc:
+            logger.warning(
+                "3D ULPIN generation skipped during ingest",
+                building=str(building.id),
+                error=str(exc),
+            )
+
         summary = await self._summarise(
             building,
             osm,

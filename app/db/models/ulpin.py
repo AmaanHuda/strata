@@ -37,8 +37,10 @@ class ULPINRecord(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     
-    # Candidate identifier (e.g. CAND-DL-01-002-000456-U-001)
-    candidate_ulpin = Column(String(60), unique=True, nullable=False, index=True)
+    # Candidate identifier (e.g. CAND-DL-01-002-000456-U-001).
+    # Widened to 120 for the deterministic 3D ULPIN format, whose worst case is
+    # ~78 characters (full 3DULPIN-01-IN-STATE-DISTRICT-P…-B…-F00-U…-XXXX form).
+    candidate_ulpin = Column(String(120), unique=True, nullable=False, index=True)
     
     # Official government assigned ULPIN (NULLABLE - never auto-fabricated)
     official_ulpin = Column(String(30), unique=True, nullable=True, index=True)
@@ -53,9 +55,15 @@ class ULPINRecord(Base):
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
 
     # Generation metadata
-    generation_method = Column(String(50), nullable=False)  # manual, ml_derived, survey
+    generation_method = Column(String(50), nullable=False)  # manual, ml_derived, survey, 3D_GEOMETRY_HASH_V1
     confidence_score = Column(String(20), default="MEDIUM", nullable=True)  # HIGH, MEDIUM, LOW, INSUFFICIENT
     is_authoritative = Column(Boolean, default=False, nullable=False)
+
+    # Versioning + taxonomy for the deterministic 3D ULPIN system.
+    # NULL on legacy (pre-3D) records so the legacy identifiers stay reproducible.
+    algorithm_version = Column(String(50), nullable=True, index=True)  # e.g. 3D_GEOMETRY_HASH_V1
+    canonicalization_version = Column(String(30), nullable=True)  # e.g. CANON_V1
+    object_type = Column(String(30), nullable=True)  # LAND_PARCEL, BUILDING, APARTMENT, ...
 
     # Legal note
     legal_disclaimer = Column(

@@ -235,6 +235,12 @@ class UnitStructureOut(BaseModel):
     candidate_ulpin: Optional[str] = None
     status: str = "CANDIDATE"
     is_verified: bool = False
+    # Deterministic 3D ULPIN (SYSTEM GENERATED). None when real unit geometry is
+    # absent — no identifier is fabricated in that case.
+    three_d_ulpin: Optional[str] = None
+    object_type: Optional[str] = None
+    z_min_m: Optional[float] = None
+    z_max_m: Optional[float] = None
 
 
 class FloorStructureOut(BaseModel):
@@ -252,6 +258,12 @@ class FloorStructureOut(BaseModel):
     candidate_ulpin: Optional[str] = None
     status: str = "CANDIDATE"
     is_verified: bool = False
+    # Deterministic 3D ULPIN (SYSTEM GENERATED): floor code + vertical range.
+    three_d_ulpin: Optional[str] = None
+    floor_code: Optional[str] = None
+    object_type: Optional[str] = None
+    z_min_m: Optional[float] = None
+    z_max_m: Optional[float] = None
     units: List[UnitStructureOut] = Field(default_factory=list)
 
 
@@ -269,6 +281,14 @@ class BuildingStructureOut(BaseModel):
     candidate_ulpin: Optional[str] = None
     status: str = "CANDIDATE"
     is_verified: bool = False
+    # Deterministic 3D ULPIN (SYSTEM GENERATED) — never labelled "Official ULPIN".
+    three_d_ulpin: Optional[str] = None
+    parcel_three_d_ulpin: Optional[str] = None
+    object_type: Optional[str] = None
+    algorithm_version: Optional[str] = None
+    canonicalization_version: Optional[str] = None
+    # "SYSTEM GENERATED" when present, otherwise the honest reason it is absent.
+    three_d_ulpin_status: Optional[str] = None
     centroid: Optional[CentroidPoint] = None
     address: Optional[str] = None
     district: Optional[str] = None

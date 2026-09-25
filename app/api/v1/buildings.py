@@ -1,5 +1,5 @@
 """Building CRUD, Floor listing, history, and ML trigger endpoints."""
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ import json
 
 from app.api.v1.deps import get_current_user, require_roles
 from app.core.errors import NotFoundError
+from app.core.logging import logger
 from app.db.models.property import Building, Floor
 from app.db.models.user import User, UserRole
 from app.db.repositories.base import BaseRepository
@@ -155,6 +156,36 @@ async def get_building_structure(
 
     parcel = await db.get(Parcel, building.parcel_id)
 
+    # --- Deterministic 3D ULPINs (SYSTEM GENERATED) -------------------------- #
+    # Materialised once — when real geometry and vertical information exist — and
+    # then reused from the ulpin_records registry. Best-effort: a failure here never
+    # breaks the hierarchy endpoint, and absent inputs report an honest reason
+    # instead of a fabricated identifier.
+    from app.services.ulpin_3d import ULPIN3DService
+
+    ulp3d: Optional[Dict[str, Any]] = None
+    try:
+        ulp3d = await ULPIN3DService(db).sync_building(building_id)
+    except Exception as exc:  # never fail the read because ID generation failed
+        logger.warning(
+            "3D ULPIN sync skipped for building",
+            building=str(building_id),
+            error=str(exc),
+        )
+
+    floor_ulpins = (ulp3d or {}).get("floors", {}) or {}
+    unit_ulpins = (ulp3d or {}).get("units", {}) or {}
+
+    def _three_d_status() -> Optional[str]:
+        if ulp3d is None:
+            return "3D ULPIN unavailable — generation did not complete"
+        if (ulp3d.get("building") or {}).get("ulpin"):
+            return "SYSTEM GENERATED"
+        for item in ulp3d.get("skipped", []):
+            if item.get("entity") == "building":
+                return f"No 3D ULPIN — {item.get('reason')}"
+        return "No 3D ULPIN — insufficient real geometry/vertical information"
+
     centroid = None
     if building.footprint_2d is not None:
         c_res = await db.execute(select(func.ST_AsGeoJSON(func.ST_Centroid(Building.footprint_2d))).where(Building.id == building_id))
@@ -185,10 +216,15 @@ async def get_building_structure(
                 candidate_ulpin=u.candidate_ulpin,
                 status=u.status,
                 is_verified=u.is_verified,
+                three_d_ulpin=(unit_ulpins.get(str(u.id)) or {}).get("ulpin"),
+                object_type=(unit_ulpins.get(str(u.id)) or {}).get("object_type"),
+                z_min_m=(unit_ulpins.get(str(u.id)) or {}).get("z_min_m"),
+                z_max_m=(unit_ulpins.get(str(u.id)) or {}).get("z_max_m"),
             )
             for u in sorted(flr.units, key=lambda x: x.unit_number)
             if u.is_active
         ]
+        floor_three_d = floor_ulpins.get(str(flr.id)) or {}
         floor_structures.append(
             FloorStructureOut(
                 id=flr.id,
@@ -204,6 +240,11 @@ async def get_building_structure(
                 candidate_ulpin=flr.candidate_ulpin,
                 status=flr.status,
                 is_verified=flr.is_verified,
+                three_d_ulpin=floor_three_d.get("ulpin"),
+                floor_code=floor_three_d.get("floor_code"),
+                object_type=floor_three_d.get("object_type"),
+                z_min_m=floor_three_d.get("z_min_m"),
+                z_max_m=floor_three_d.get("z_max_m"),
                 units=unit_structures,
             )
         )
@@ -221,6 +262,12 @@ async def get_building_structure(
         candidate_ulpin=building.candidate_ulpin,
         status=building.status,
         is_verified=building.is_verified,
+        three_d_ulpin=(ulp3d or {}).get("building", {}).get("ulpin") if ulp3d else None,
+        parcel_three_d_ulpin=(ulp3d or {}).get("parcel", {}).get("ulpin") if ulp3d else None,
+        object_type=(ulp3d or {}).get("building", {}).get("object_type") if ulp3d else None,
+        algorithm_version=(ulp3d or {}).get("algorithm_version"),
+        canonicalization_version=(ulp3d or {}).get("canonicalization_version"),
+        three_d_ulpin_status=_three_d_status(),
         centroid=centroid,
         address=f"{building.building_name or 'Building'}, Parcel {parcel.parcel_number if parcel else ''}",
         district=parcel.district if parcel else None,

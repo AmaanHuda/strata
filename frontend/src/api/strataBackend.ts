@@ -202,6 +202,11 @@ export interface UnitStructure {
   candidate_ulpin: string | null;
   status: string;
   is_verified: boolean;
+  /** Deterministic 3D ULPIN (SYSTEM GENERATED). Null when no real unit geometry exists. */
+  three_d_ulpin: string | null;
+  object_type: string | null;
+  z_min_m: number | null;
+  z_max_m: number | null;
 }
 
 export interface FloorStructure {
@@ -218,6 +223,12 @@ export interface FloorStructure {
   candidate_ulpin: string | null;
   status: string;
   is_verified: boolean;
+  /** Deterministic 3D ULPIN (SYSTEM GENERATED) for this floor. */
+  three_d_ulpin: string | null;
+  floor_code: string | null;
+  object_type: string | null;
+  z_min_m: number | null;
+  z_max_m: number | null;
   units: UnitStructure[];
 }
 
@@ -234,6 +245,14 @@ export interface BuildingStructure {
   candidate_ulpin: string | null;
   status: string;
   is_verified: boolean;
+  /** Deterministic 3D ULPIN (SYSTEM GENERATED) — never an official government ULPIN. */
+  three_d_ulpin: string | null;
+  parcel_three_d_ulpin: string | null;
+  object_type: string | null;
+  algorithm_version: string | null;
+  canonicalization_version: string | null;
+  /** "SYSTEM GENERATED" when present, otherwise the reason it is absent. */
+  three_d_ulpin_status: string | null;
   centroid: CentroidPoint | null;
   address: string | null;
   district: string | null;

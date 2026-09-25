@@ -1,6 +1,6 @@
 import React from "react";
 import { css } from "@emotion/react";
-import { X, Building2, Home, Layers, Zap, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { X, Building2, Home, Layers, Zap, CheckCircle2, AlertCircle, Info, Hash } from "lucide-react";
 import { INK, SHADOW_LG } from "@/theme/color";
 import { useAreaStore } from "@/state/areaStore";
 
@@ -112,6 +112,12 @@ export function BuildingSidebar({ info, onClose }: BuildingSidebarProps) {
   const candidateUlpin = backendStructure?.candidate_ulpin ?? null;
   const ulpinStatus = backendStructure?.status ?? null;
   const isVerified = backendStructure?.is_verified ?? false;
+
+  // Deterministic 3D ULPIN (SYSTEM GENERATED) — read from the backend only.
+  const threeDUlpin = backendStructure?.three_d_ulpin ?? null;
+  const threeDStatus = backendStructure?.three_d_ulpin_status ?? null;
+  const algorithmVersion = backendStructure?.algorithm_version ?? null;
+  const canonVersion = backendStructure?.canonicalization_version ?? null;
 
   // ML provenance
   const mlDerived = backendStructure?.provenance?.ml_derived ?? null;
@@ -236,6 +242,60 @@ export function BuildingSidebar({ info, onClose }: BuildingSidebarProps) {
           Fetching real backend data…
         </div>
       )}
+
+      {/* Deterministic 3D ULPIN — SYSTEM GENERATED (never the official field) */}
+      <div
+        css={css({
+          background: "#F5F3FF",
+          border: `1.5px solid ${INK}`,
+          borderRadius: "12px",
+          padding: "1rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.35rem",
+        })}
+      >
+        <div css={css({ display: "flex", alignItems: "center", gap: "0.4rem" })}>
+          <Hash size={14} color="#7C3AED" />
+          <span
+            css={css({
+              fontSize: "0.7rem",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: "#64748B",
+            })}
+          >
+            3D ULPIN — System Generated
+          </span>
+        </div>
+        {threeDUlpin ? (
+          <>
+            <div
+              css={css({
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                color: "#0F172A",
+                fontFamily: "monospace",
+                wordBreak: "break-all",
+              })}
+            >
+              {threeDUlpin}
+            </div>
+            <div css={css({ fontSize: "0.63rem", color: "#7C3AED", fontWeight: 800 })}>
+              SYSTEM GENERATED · {algorithmVersion ?? "3D_GEOMETRY_HASH_V1"} · {canonVersion ?? "CANON_V1"}
+            </div>
+          </>
+        ) : (
+          <div css={css({ fontSize: "0.8rem", color: "#94A3B8", fontStyle: "italic", fontWeight: 600 })}>
+            {isFetching ? "Loading…" : (threeDStatus ?? "Not generated")}
+          </div>
+        )}
+        <div css={css({ fontSize: "0.65rem", color: "#64748B", fontWeight: 700 })}>
+          Official ULPIN:{" "}
+          <span css={css({ color: "#94A3B8", fontStyle: "italic" })}>Not supplied / Not verified</span>
+        </div>
+      </div>
 
       {/* ULPIN Section — Only real backend ULPIN, never generated */}
       <div

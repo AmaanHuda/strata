@@ -12,6 +12,7 @@ import {
   Info,
   Zap,
   AlertCircle,
+  Home,
 } from "lucide-react";
 import { INK } from "@/theme/color";
 
@@ -25,6 +26,10 @@ export function BuildingIsolateScene() {
   const backendLookupDone = useAreaStore((state) => state.backendLookupDone);
   const backendFoundData = useAreaStore((state) => state.backendFoundData);
   const setAppStep = useAreaStore((state) => state.setAppStep);
+  const selectedFloorId = useAreaStore((state) => state.selectedFloorId);
+  const selectedUnitId = useAreaStore((state) => state.selectedUnitId);
+  const setSelectedFloorId = useAreaStore((state) => state.setSelectedFloorId);
+  const setSelectedUnitId = useAreaStore((state) => state.setSelectedUnitId);
   const [extractedFloor, setExtractedFloor] = useState(0);
 
 
@@ -93,6 +98,24 @@ export function BuildingIsolateScene() {
   const officialUlpin = backendStructure?.official_ulpin ?? null;
   const candidateUlpin = backendStructure?.candidate_ulpin ?? null;
   const ulpinStatus = backendStructure?.status ?? null;
+
+  // Deterministic 3D ULPIN (backend-generated, SYSTEM GENERATED — never official).
+  const threeDUlpin = backendStructure?.three_d_ulpin ?? null;
+  const parcel3dUlpin = backendStructure?.parcel_three_d_ulpin ?? null;
+  const threeDStatus = backendStructure?.three_d_ulpin_status ?? null;
+
+  // Selected floor / unit, read from the real backend hierarchy.
+  const selectedFloor =
+    backendStructure?.floors.find((f) => f.id === selectedFloorId) ?? null;
+  const selectedUnit =
+    selectedFloor?.units.find((u) => u.id === selectedUnitId) ?? null;
+
+  // Floors ordered bottom-up: rendered extrusion index i corresponds to
+  // orderedFloors[i], so a 3D click resolves to a real backing floor id.
+  const orderedFloors = backendStructure
+    ? [...backendStructure.floors].sort((a, b) => a.floor_number - b.floor_number)
+    : [];
+  const selectedFloorIndex = orderedFloors.findIndex((f) => f.id === selectedFloorId);
 
   // ML provenance
   const mlDerived = backendStructure?.provenance?.ml_derived ?? null;
@@ -270,16 +293,47 @@ export function BuildingIsolateScene() {
             />
           ) : null}
 
-          {/* ULPIN — strict display */}
-          {officialUlpin ? (
+          {/* 3D ULPIN — SYSTEM GENERATED (deterministic, non-authoritative) */}
+          <InfoRow
+            icon={<Hash size={18} />}
+            label="3D ULPIN (System Generated)"
+            value={threeDUlpin ?? (isFetching ? "Loading…" : "Not generated")}
+            badge={threeDUlpin ? "SYSTEM GENERATED" : undefined}
+            badgeColor="#7C3AED"
+          />
+
+          {parcel3dUlpin ? (
             <InfoRow
               icon={<Hash size={18} />}
-              label="Official ULPIN (Government)"
-              value={officialUlpin}
-              badge="OFFICIAL"
-              badgeColor="#16A34A"
+              label="Parcel 3D ULPIN (System Generated)"
+              value={parcel3dUlpin}
             />
-          ) : candidateUlpin ? (
+          ) : null}
+
+          {threeDStatus && threeDStatus !== "SYSTEM GENERATED" ? (
+            <InfoRow icon={<AlertCircle size={18} />} label="3D ULPIN Status" value={threeDStatus} />
+          ) : null}
+
+          {backendStructure?.algorithm_version ? (
+            <InfoRow
+              icon={<Info size={18} />}
+              label="ID Algorithm"
+              value={`${backendStructure.algorithm_version} · ${
+                backendStructure.canonicalization_version ?? "CANON_V1"
+              }`}
+            />
+          ) : null}
+
+          {/* Official ULPIN — only ever a real government-supplied value */}
+          <InfoRow
+            icon={<Hash size={18} />}
+            label="Official ULPIN (Government)"
+            value={officialUlpin ?? "Not supplied / Not verified"}
+            badge={officialUlpin ? "OFFICIAL" : undefined}
+            badgeColor="#16A34A"
+          />
+
+          {candidateUlpin ? (
             <InfoRow
               icon={<Hash size={18} />}
               label="Candidate ULPIN (Not Official)"
@@ -287,13 +341,7 @@ export function BuildingIsolateScene() {
               badge="CANDIDATE"
               badgeColor="#B45309"
             />
-          ) : (
-            <InfoRow
-              icon={<Hash size={18} />}
-              label="ULPIN"
-              value={isFetching ? "Loading…" : "Not Available / Not Verified"}
-            />
-          )}
+          ) : null}
 
           {ulpinStatus && (
             <InfoRow icon={<Info size={18} />} label="ULPIN Status" value={ulpinStatus} />
@@ -362,49 +410,195 @@ export function BuildingIsolateScene() {
               </h3>
             </div>
             <div css={css({ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "200px", overflowY: "auto" })}>
-              {backendStructure.floors.map((floor) => (
-                <div
-                  key={floor.id}
-                  css={css({
-                    background: "#FFFFFF",
-                    border: `1.5px solid ${INK}`,
-                    borderRadius: "8px",
-                    padding: "0.6rem 0.85rem",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  })}
-                >
-                  <div>
-                    <div css={css({ fontSize: "0.8rem", fontWeight: 800, color: "#0F172A" })}>
-                      {floor.floor_label || `Floor ${floor.floor_number}`}
-                    </div>
-                    {floor.floor_use && (
-                      <div css={css({ fontSize: "0.65rem", color: "#64748B", fontWeight: 600 })}>
-                        {floor.floor_use}
+              {orderedFloors.map((floor) => {
+                const isActiveFloor = floor.id === selectedFloorId;
+                return (
+                  <button
+                    key={floor.id}
+                    onClick={() => {
+                      setSelectedFloorId(isActiveFloor ? null : floor.id);
+                      setSelectedUnitId(null);
+                    }}
+                    css={css({
+                      background: isActiveFloor ? "#FEF3C7" : "#FFFFFF",
+                      border: `1.5px solid ${INK}`,
+                      boxShadow: isActiveFloor ? "0px 0px 0px #0F172A" : "2px 2px 0px #0F172A",
+                      transform: isActiveFloor ? "translate(1px, 1px)" : "none",
+                      borderRadius: "8px",
+                      padding: "0.6rem 0.85rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      width: "100%",
+                      transition: "background 0.16s ease",
+                    })}
+                  >
+                    <div>
+                      <div css={css({ fontSize: "0.8rem", fontWeight: 800, color: "#0F172A" })}>
+                        {floor.floor_label || `Floor ${floor.floor_number}`}
+                        {floor.floor_code ? ` · ${floor.floor_code}` : ""}
                       </div>
-                    )}
-                  </div>
-                  <div css={css({ fontSize: "0.75rem", color: "#2563EB", fontWeight: 800 })}>
-                    {floor.units.length > 0 ? `${floor.units.length} units` : "No units"}
-                  </div>
-                  {floor.units.length > 0 && floor.units[0].candidate_ulpin && (
-                    <div
+                      <div css={css({ fontSize: "0.65rem", color: "#64748B", fontWeight: 600 })}>
+                        {floor.floor_use || "type not recorded"}
+                        {floor.z_min_m != null && floor.z_max_m != null
+                          ? ` · z ${floor.z_min_m.toFixed(1)}–${floor.z_max_m.toFixed(1)} m`
+                          : ""}
+                      </div>
+                    </div>
+                    <div css={css({ fontSize: "0.72rem", color: "#2563EB", fontWeight: 800, textAlign: "right" })}>
+                      {floor.units.length > 0 ? `${floor.units.length} units` : "No units"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selected floor information panel — real backend values only. */}
+            {selectedFloor && (
+              <div
+                css={css({
+                  marginTop: "1rem",
+                  background: "#FFFBEB",
+                  border: `2px solid ${INK}`,
+                  borderRadius: "12px",
+                  padding: "1rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                })}
+              >
+                <div css={css({ display: "flex", alignItems: "center", gap: "0.5rem" })}>
+                  <Layers size={16} color="#B45309" strokeWidth={2.5} />
+                  <h4 css={css({ margin: 0, fontSize: "0.85rem", fontWeight: 800, color: "#0F172A" })}>
+                    Floor {selectedFloor.floor_number}
+                    {selectedFloor.floor_code ? ` · ${selectedFloor.floor_code}` : ""}
+                  </h4>
+                </div>
+                <InfoRow
+                  icon={<Hash size={18} />}
+                  label="3D ULPIN (System Generated)"
+                  value={selectedFloor.three_d_ulpin ?? "Not generated"}
+                  badge={selectedFloor.three_d_ulpin ? "SYSTEM GENERATED" : undefined}
+                  badgeColor="#7C3AED"
+                />
+                <InfoRow icon={<Layers size={18} />} label="Floor Type" value={selectedFloor.floor_use ?? "Not available"} />
+                <InfoRow icon={<Info size={18} />} label="Object Type" value={selectedFloor.object_type ?? "Not available"} />
+                <InfoRow icon={<Info size={18} />} label="Building ID" value={selectedFloor.building_id} />
+                <InfoRow icon={<Info size={18} />} label="Parcel ID" value={backendStructure?.parcel_id ?? "Not available"} />
+                <InfoRow
+                  icon={<Maximize size={18} />}
+                  label="Vertical Range (z_min / z_max)"
+                  value={
+                    selectedFloor.z_min_m != null && selectedFloor.z_max_m != null
+                      ? `${selectedFloor.z_min_m.toFixed(2)} – ${selectedFloor.z_max_m.toFixed(2)} m`
+                      : "Not available"
+                  }
+                />
+                <InfoRow
+                  icon={<Maximize size={18} />}
+                  label="Floor Height"
+                  value={selectedFloor.ceiling_height_m != null ? `${selectedFloor.ceiling_height_m.toFixed(2)} m` : "Not available"}
+                />
+                <InfoRow
+                  icon={<Maximize size={18} />}
+                  label="Floor Area"
+                  value={
+                    selectedFloor.floor_area_sqm != null
+                      ? `${Math.round(Number(selectedFloor.floor_area_sqm)).toLocaleString()} m²`
+                      : "Not available"
+                  }
+                />
+                <InfoRow icon={<Home size={18} />} label="Unit Count" value={String(selectedFloor.units.length)} />
+                <InfoRow
+                  icon={<Info size={18} />}
+                  label="Status / Source"
+                  value={`${selectedFloor.status}${selectedFloor.is_verified ? " · verified" : " · not verified"}`}
+                />
+
+                {selectedFloor.units.length > 0 && (
+                  <div css={css({ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.35rem" })}>
+                    <span
                       css={css({
-                        fontSize: "0.6rem",
+                        fontSize: "0.65rem",
+                        textTransform: "uppercase",
+                        fontWeight: 800,
                         color: "#64748B",
-                        fontWeight: 700,
-                        fontFamily: "monospace",
-                        marginTop: "0.15rem",
+                        letterSpacing: "0.05em",
                       })}
                     >
-                      {floor.units[0].candidate_ulpin}
-                      {floor.units.length > 1 ? ` … (+${floor.units.length - 1})` : ""}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                      Units on this floor (click to inspect)
+                    </span>
+                    {selectedFloor.units.map((u) => (
+                      <button
+                        key={u.id}
+                        onClick={() => setSelectedUnitId(u.id === selectedUnitId ? null : u.id)}
+                        css={css({
+                          background: u.id === selectedUnitId ? "#FEF3C7" : "#FFFFFF",
+                          border: `1.5px solid ${INK}`,
+                          borderRadius: "8px",
+                          padding: "0.45rem 0.7rem",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          color: "#0F172A",
+                        })}
+                      >
+                        {u.unit_number} · {u.unit_type || "type n/a"}
+                        {u.three_d_ulpin ? "" : " · no 3D geometry"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedUnit && (
+                  <div
+                    css={css({
+                      marginTop: "0.5rem",
+                      background: "#FFFFFF",
+                      border: `1.5px solid ${INK}`,
+                      borderRadius: "10px",
+                      padding: "0.85rem",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.4rem",
+                    })}
+                  >
+                    <InfoRow
+                      icon={<Home size={18} />}
+                      label={`Unit ${selectedUnit.unit_number} — 3D ULPIN`}
+                      value={selectedUnit.three_d_ulpin ?? "Not generated (no real unit geometry stored)"}
+                      badge={selectedUnit.three_d_ulpin ? "SYSTEM GENERATED" : undefined}
+                      badgeColor="#7C3AED"
+                    />
+                    <InfoRow icon={<Info size={18} />} label="Unit Type" value={selectedUnit.unit_type ?? "Not available"} />
+                    <InfoRow
+                      icon={<Maximize size={18} />}
+                      label="Unit Area"
+                      value={selectedUnit.area_sqm != null ? `${Number(selectedUnit.area_sqm).toFixed(1)} m²` : "Not available"}
+                    />
+                    <InfoRow
+                      icon={<Maximize size={18} />}
+                      label="Vertical Range (z)"
+                      value={
+                        selectedUnit.z_min_m != null && selectedUnit.z_max_m != null
+                          ? `${selectedUnit.z_min_m.toFixed(2)} – ${selectedUnit.z_max_m.toFixed(2)} m`
+                          : "Not available"
+                      }
+                    />
+                    <InfoRow icon={<Info size={18} />} label="Object Type" value={selectedUnit.object_type ?? "Not available"} />
+                    <InfoRow
+                      icon={<Info size={18} />}
+                      label="Status"
+                      value={`${selectedUnit.status}${selectedUnit.is_verified ? " · verified" : " · not verified"}`}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -581,6 +775,16 @@ export function BuildingIsolateScene() {
           key={selectedBuildingDetail.id}
           info={infoForScene}
           extractedFloor={extractedFloor}
+          floors={orderedFloors.map((f) => ({
+            id: f.id,
+            floor_number: f.floor_number,
+            label: f.floor_label,
+          }))}
+          selectedFloorIndex={selectedFloorIndex}
+          onSelectFloor={(floorId) => {
+            setSelectedFloorId(floorId);
+            setSelectedUnitId(null);
+          }}
         />
       </div>
     </div>
