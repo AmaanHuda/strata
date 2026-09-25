@@ -1,619 +1,350 @@
-# STRATA 3D-Mapping — Monorepo
+# STRATA — 3D ULPIN & Vertical Property Mapping System
 
-**SIH 2026 PS26011 — 3D ULPIN Generation & Vertical Property Mapping System**
+**Smart India Hackathon 2026 · Problem Statement PS26011**
 
-This repository contains the **Frontend** (React + Mapbox GL JS / Three.js), the **Backend** (FastAPI), and the **ML Engine** (FastAPI) as unified modules in a clean fullstack monorepo.
+Turn a **2D land parcel** into a **3D, queryable stack of buildings → floors → units**, where
+every object carries a **deterministic, collision-safe 3D identifier** and can be **clicked
+and inspected in the browser**.
 
-> See [`BACKEND_INTEGRATION_GUIDE.md`](./BACKEND_INTEGRATION_GUIDE.md) for the full API reference.
+> A 3D cadastral map is only useful if you can point at a floor and ask *"what is this?"*.
+> STRATA answers that question — with a real PostGIS record and a reproducible ID behind it.
+
+<table>
+<tr><td><b>Repository</b></td><td>Fullstack monorepo: React frontend, FastAPI backend, separate ML engine</td></tr>
+<tr><td><b>Geometry truth</b></td><td>PostgreSQL + PostGIS 3.4 — the frontend never invents geometry</td></tr>
+<tr><td><b>Identity</b></td><td>Deterministic 3D ULPIN (<code>3D_GEOMETRY_HASH_V1</code>, canonicalization <code>CANON_V1</code>)</td></tr>
+<tr><td><b>Backend tests</b></td><td>212 passing</td></tr>
+<tr><td><b>Prototype target</b></td><td>The Taj Mahal Palace Hotel, Apollo Bandar, Mumbai (real OSM footprint)</td></tr>
+</table>
 
 ---
 
-## Repository Structure
+## 1. What it does
+
+```
+2D parcel → building footprint → height + floors → floors → units
+          → canonicalized geometry → 3D ULPIN → PostGIS → interactive 3D viewer
+```
+
+The result is **not** a static 3D picture. Every building, floor and unit is
+individually selectable and queryable:
+
+| I click… | What happens |
+|---|---|
+| a **building** | it is isolated from its surroundings using its **real** footprint extruded to its **real** stored height, and its metadata panel opens |
+| a **floor** | that floor is highlighted and lifted, stays recognisable as part of the building, and a floor information panel shows its 3D ULPIN, floor code, `z_min`/`z_max`, area and unit count |
+| a **unit** (when unit geometry exists) | the unit is highlighted and its panel opens |
+| **empty space** | the selection clears and the area view returns |
+
+---
+
+## 2. Architecture at a glance
+
+Three independently deployable tiers, talking over explicit HTTP contracts:
+
+```mermaid
+flowchart LR
+    subgraph Client["1 · Client"]
+        FE["React 19 + TypeScript<br/>Mapbox GL JS + Three.js"]
+    end
+
+    subgraph Service["2 · Backend API — FastAPI"]
+        API["REST /api/v1<br/>JWT auth + RBAC"]
+        DOM["Domain services<br/>ulpin_3d · geometry_canonical<br/>on_demand_ingest · cadastral_codes"]
+    end
+
+    subgraph MLE["3 · ML engine — FastAPI"]
+        ML["building_extraction · height<br/>floors · units · fusion · confidence"]
+    end
+
+    subgraph Store["4 · Persistence"]
+        PG[("PostgreSQL + PostGIS 3.4<br/>geometry is the source of truth")]
+        REDIS[("Redis<br/>async jobs + cache")]
+    end
+
+    subgraph Ext["5 · External real sources"]
+        OSM["OpenStreetMap Overpass API<br/>real footprints + real tags"]
+        GEO["Nominatim<br/>address geocoding"]
+    end
+
+    FE -->|"spatial lookup, building structure"| API
+    API --> DOM
+    DOM --> ML
+    DOM --> PG
+    API --> PG
+    API --> REDIS
+    DOM --> OSM
+    FE --> GEO
+```
+
+**The ML engine is optional by design.** If it is down, real source tags are still
+persisted and any field without a real source stays `NULL` — never a plausible-looking
+default.
+
+---
+
+## 3. Workflow
+
+```mermaid
+flowchart TD
+    A["2D land parcel"] --> B["Building footprint detection / extraction"]
+    B --> C["Height and floor-count resolution"]
+    C --> D["Vertical segmentation into floors"]
+    D --> E["Candidate unit delineation"]
+    E --> F["Geometry canonicalization · CANON_V1"]
+    F --> G["Deterministic 3D ULPIN · 3D_GEOMETRY_HASH_V1"]
+    G --> H[("PostGIS<br/>parcels · buildings · floors · units · ulpin_records")]
+    H --> I["Interactive 3D viewer"]
+    I --> J["Click a building → isolated + metadata"]
+    J --> K["Click a floor → highlighted + floor panel"]
+    K --> L["Click a unit, when unit geometry exists"]
+```
+
+How data actually gets in:
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant O as Overpass / OSM
+    participant M as ML engine
+    participant DB as PostGIS
+
+    U->>F: Draw a box, choose Fetch real data here
+    F->>B: POST /api/v1/ingest/location
+    B->>O: fetch real footprints and tags
+    O-->>B: geometry, height, building:levels, name, addr:*
+    B->>M: POST /process/parcel with real geometry and tags
+    M-->>B: ML Output Contract v1.0.0, height, floors, evidence, confidence
+    B->>DB: persist parcel, building, floors, candidate units
+    B->>DB: generate and store 3D ULPINs for the hierarchy
+    B-->>F: ingest summary, candidate ULPINs, disclaimers
+```
+
+Deeper diagrams — data model (ER), component map, ULPIN pipeline, click sequence —
+live in **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**.
+
+---
+
+## 4. The 3D ULPIN
+
+A **system-generated**, deterministic identifier for a parcel, building, floor or unit:
+
+```
+3DULPIN-01-IN-{STATE}-{DISTRICT}-{PARCEL_ID}-{BUILDING_ID}-{FLOOR_CODE}-{UNIT_ID}-{CHECKSUM}
+```
+
+| Segment | Rule | Width |
+|---|---|---|
+| `PARCEL_ID` | `P` + Base32(SHA-256(country, state, district, admin context, canonical parcel geometry)) | 12 |
+| `BUILDING_ID` | `B` + Base32(SHA-256(parcel id, canonical footprint, `bucket(height, 0.5 m)`)) | 8 |
+| `FLOOR_CODE` | derived, not hashed: `F00` ground, `F01..` above, `B01..` basement, `E01..` elevated | 3 |
+| `UNIT_ID` | `U` + Base32(SHA-256(building id, floor code, canonical unit geometry, `bucket(z_min, 0.1 m)`, `bucket(z_max, 0.1 m)`)) | 8 |
+| `CHECKSUM` | first 4 Base32 chars of SHA-256(full id without checksum) | 4 |
+
+**Real output** for the Taj Mahal Palace Hotel (Apollo Bandar, Mumbai):
+
+```
+building   3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-X00-U00000000-X7ZC
+parcel     3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-B00000000-X00-U00000000-WS6N
+floor F00  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F00-U00000000-VR2H   z 0.0–3.2 m
+floor F05  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F05-U00000000-3CRY   z 16.0–19.2 m
+```
+
+### Why it is trustworthy
+
+| Property | Guarantee |
+|---|---|
+| **Deterministic** | A pure function of canonicalized geometry and bucketed vertical values. Re-running returns the identical id. |
+| **Order-independent** | Reversed vertex order, a rotated ring start vertex and reordered MultiPolygon components all canonicalize to the same string. |
+| **Bucketed** | Continuous values are snapped to documented buckets (`0.5 m` height, `0.1 m` for `z`), so `21.73 m` and `21.74 m` are the same building. |
+| **Versioned** | `algorithm_version = 3D_GEOMETRY_HASH_V1`, `canonicalization_version = CANON_V1`. A future change ships a new version instead of silently altering V1 ids. |
+| **Checksummed** | `validate_3d_ulpin()` recomputes the checksum; any single-character mutation is rejected. |
+| **Collision-safe** | Segments are hierarchical, so a building id only competes with siblings in the same parcel. A genuine clash is logged `CRITICAL` and resolved by deterministically widening the hash — never by appending `-2`, never randomly. |
+| **Never official** | `official_ulpin` stays `NULL` and `is_authoritative` stays `False`. The UI always says **3D ULPIN — SYSTEM GENERATED**, and never shows a generated value under "Official ULPIN". |
+
+---
+
+## 5. Tech stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 19, TypeScript 5.7, Vite 6, Zustand 5, Emotion, Axios, lucide-react |
+| **3D / mapping** | Mapbox GL JS 3.30, react-map-gl 8, Three.js 0.186, @react-three/fiber 9, @react-three/drei 10 |
+| **Backend** | Python 3.12+, FastAPI 0.115, SQLAlchemy 2.0 async, asyncpg, Pydantic 2.9, Alembic 1.13, httpx, structlog |
+| **Auth** | JWT (python-jose) + bcrypt (passlib), role-based access control |
+| **Async jobs** | Celery 5.4 + Redis 5 |
+| **Geospatial** | PostgreSQL + **PostGIS 3.4**, Shapely 2.0, pyproj 3.6, GeoAlchemy2 |
+| **ML engine** | Python + PyTorch (building-extraction checkpoint), NumPy, FastAPI, JSON contract v1.0.0 |
+| **External real data** | OpenStreetMap Overpass API, Nominatim geocoding |
+| **Packaging** | Docker Compose (db · redis · backend · worker · ml-engine · frontend), Nginx |
+
+---
+
+## 6. Monorepo layout
 
 ```
 3D-MAPPING/
-├── frontend/               ← Frontend (React 19 + TypeScript + Mapbox GL JS + Three.js)
-│   ├── src/                  Application source
-│   │   ├── api/                Backend REST client (Axios, JWT auth)
-│   │   ├── components/         UI, Map, Panels, 3D Scenes
-│   │   ├── state/              Zustand store (real backend entity state)
-│   │   ├── three/              Mapbox 3D terrain space & feature parsing
-│   │   └── ui/                 Main view & modal workflows
-│   ├── Dockerfile            Multi-stage production build (Nginx)
-│   ├── package.json
-│   └── vite.config.ts
-├── app/                    ← Backend (FastAPI + SQLAlchemy + PostGIS)
-│   ├── api/                  API routes
-│   ├── core/                 Config, auth, errors, logging
-│   ├── db/                   ORM models, repositories, migrations
-│   ├── integrations/
-│   │   └── ml_engine/        Backend ↔ ML Engine boundary
-│   │       ├── client.py       Async HTTP client (HTTPX)
-│   │       ├── contracts.py    Pydantic request/response schemas
-│   │       ├── adapter.py      Orchestrates ML call + DB persist
-│   │       └── mapper.py       Maps ML output → ORM entities
-│   ├── services/
-│   ├── schemas/
-│   └── workers/
-├── ml-engine/              ← ML Engine (FastAPI, separate service)
-│   ├── src/                  ML source modules
-│   │   ├── server.py           FastAPI app (port 8001)
-│   │   ├── inference/          MLEnginePipeline orchestrator
-│   │   ├── building_extraction/
-│   │   ├── height/
-│   │   ├── floors/
-│   │   ├── units/
-│   │   ├── reconstruction/
-│   │   ├── fusion/
-│   │   ├── confidence/
-│   │   ├── geospatial/
-│   │   ├── change_detection/
-│   │   ├── validation/
-│   │   └── preprocessing/
-│   ├── models/checkpoints/   building_extraction_unet — real trained checkpoint (KAGGLE_BENCHMARK provenance)
-│   ├── schemas/              ml_output_contract.json (v1.0.0)
-│   ├── scripts/              Training + benchmark + validation utilities
-│   │   └── train_building_extraction.py   Reproducible U-Net training harness
-│   ├── tests/                100 unit tests (torch env) / 99 (torch-free)
-│   ├── docs/                 ML specification & audit documents
-│   ├── pyproject.toml
-│   └── Dockerfile
-├── alembic/                ← DB migrations (backend)
-├── tests/                  ← Backend tests (86 passing)
-├── docker-compose.yml      ← Fullstack compose (db, redis, backend, worker, ml-engine, frontend)
-├── .env.example            ← Backend environment template
-├── .env                    ← Backend active environment
+├── app/                        # Backend API — FastAPI + SQLAlchemy + PostGIS
+│   ├── api/v1/                 #   14 routers mounted under /api/v1
+│   ├── services/               #   ulpin_3d · geometry_canonical · on_demand_ingest · cadastral_codes
+│   ├── integrations/ml_engine/ #   client · contracts · adapter · mapper (the ML boundary)
+│   ├── db/models/              #   property.py (Parcel/Building/Floor/Unit) · ulpin.py (registry)
+│   └── workers/                #   Celery async jobs
+├── ml-engine/                  # ML engine — separate FastAPI service
+│   ├── src/                    #   building_extraction · height · floors · units · fusion · inference
+│   ├── schemas/                #   ml_output_contract.json (v1.0.0)
+│   ├── models/checkpoints/     #   trained building-extraction checkpoint
+│   └── tests/                  #   100 tests
+├── frontend/                   # React 19 + Mapbox GL + Three.js
+│   └── src/
+│       ├── api/strataBackend.ts     # typed REST client
+│       ├── three/MapboxSpace.tsx    # 3D city, building click, isolation
+│       ├── components/scene/        # floor/unit selection + panels
+│       └── state/areaStore.ts       # Zustand selection state
+├── alembic/versions/           # DB migrations (head: 004_ulpin_3d_columns)
+├── tests/                      # Backend test suite (212 passing)
+├── docs/                       # ARCHITECTURE.md · validation reports · legacy notes
+├── docker-compose.yml          # db · redis · backend · worker · ml-engine · frontend
 └── README.md
 ```
 
-> **Note on naming:** The backend application module is `app/` (not `backend/`).
-> Renaming it would break all Python imports, Alembic config, and Docker paths.
-> The README refers to it as "Backend" conceptually.
-
 ---
 
-## Service Boundary
+## 7. Quick start
 
-```
-Frontend (React / Cesium / Three.js)
-    │
-    ▼  REST API (port 8000)
-Backend / FastAPI  ──────────────────────────────── app/
-    │  app/integrations/ml_engine/client.py
-    │  ML_ENGINE_URL=http://ml-engine:8001
-    ▼  HTTP POST /process/parcel
-ML Engine / FastAPI  ────────────────────────────── ml-engine/src/server.py
-    │
-    ▼  MLEnginePipeline.process_parcel()
-ML Output Contract v1.0.0  ──────────────────────── ml-engine/schemas/ml_output_contract.json
-    │
-    ▼  MLDataMapper.contract_v1_to_entities()
-Backend validation + PostGIS persistence
-```
-
-**Key rule:** `ML_ENGINE_ENABLED=false` by default.
-The backend raises `MLEngineNotAvailableError` — it never returns fabricated predictions.
-Set `ML_ENGINE_ENABLED=true` and start the ml-engine service to activate real inference.
-
----
-
-## Technology Stack
-
-| Component | Technology |
-|-----------|------------|
-| API Framework | FastAPI 0.115+ (async) |
-| Database | PostgreSQL 16 + PostGIS 3.4 |
-| ORM | SQLAlchemy 2.0 (async) + GeoAlchemy2 |
-| Migrations | Alembic |
-| Auth | JWT (python-jose) + bcrypt |
-| Task Queue | Redis (async `blpop` consumer, no Celery) |
-| Geometry | Shapely + GeoAlchemy2 + PostGIS |
-| ML Integration | HTTPX async client (decoupled, activate via env) |
-| Testing | pytest-asyncio + HTTPX AsyncClient |
-| Containerization | Docker + Docker Compose |
-
----
-
-## Quick Start (Docker)
+### Option A — Docker Compose
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/Rehan-roid/3D-Mapping-Backend.git
-cd 3D-Mapping-Backend
-cp .env.example .env
-# Edit .env: set SECRET_KEY, DATABASE_URL
-
-# 2. Start all services (PostgreSQL/PostGIS, Redis, Backend, Worker)
-docker compose up -d
-
-# 3. Run migrations
+git clone https://github.com/Rehan-roid/3D-MAPPING.git
+cd 3D-MAPPING
+cp .env.example .env          # then fill in SECRET_KEY, DATABASE_URL, VITE_MAPBOX_TOKEN
+docker compose up -d          # db · redis · ml-engine · backend · worker · frontend
 docker compose exec backend alembic upgrade head
-
-# 4. API is live at http://localhost:8000
-#    Swagger UI:  http://localhost:8000/docs
-#    OpenAPI JSON: http://localhost:8000/api/v1/openapi.json
 ```
 
----
+Then: frontend <http://localhost:3000> · API <http://localhost:8000> · Swagger <http://localhost:8000/docs>
 
-## Quick Start (Local Dev)
+### Option B — local development
 
 ```bash
-# Prerequisites: Python 3.12+, PostgreSQL + PostGIS, Redis
+# 1. Database + cache (Postgres 5432, Redis 6379)
+docker compose up -d db redis
 
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # Linux/macOS
+# 2. Backend (from the repo root)
+python -m pip install -r requirements.txt
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8123
 
-pip install -r requirements.txt
+# 3. ML engine (needs its own env; enables unit generation + inference)
+cd ml-engine && python -m uvicorn src.server:app --host 127.0.0.1 --port 8001
 
-cp .env.example .env
-# Fill in DATABASE_URL, REDIS_URL, SECRET_KEY
-
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
-
-# In another terminal - start background worker:
-python -m app.workers.worker
+# 4. Frontend
+cd frontend && npx vite --port 3000 --host 127.0.0.1
 ```
 
----
-
-## API Endpoints (v2.0.0)
-
-### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/register` | Register user |
-| POST | `/api/v1/auth/login` | Login → JWT tokens |
-| POST | `/api/v1/auth/refresh` | Refresh access token |
-| GET | `/api/v1/auth/me` | Current user profile |
-
-### Spatial Queries
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/spatial/bbox` | Viewport bounding box search |
-| GET | `/api/v1/spatial/nearby` | Radius search (metric, PostGIS geography) |
-| POST | `/api/v1/spatial/query` | Polygon intersection/contains/within query |
-| GET | `/api/v1/spatial/search` | Point-in-polygon lookup |
-
-### Parcels
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/parcels/` | List parcels (paginated) |
-| POST | `/api/v1/parcels/` | Create parcel |
-| GET | `/api/v1/parcels/{id}` | Get parcel |
-| PUT | `/api/v1/parcels/{id}` | Update parcel |
-| DELETE | `/api/v1/parcels/{id}` | Delete parcel |
-
-### Buildings
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/buildings/` | List buildings |
-| POST | `/api/v1/buildings/` | Create building |
-| GET | `/api/v1/buildings/{id}` | Get building |
-| GET | `/api/v1/buildings/{id}/structure` | Full hierarchy (building→floors→units) |
-| GET | `/api/v1/buildings/{id}/geometry` | 2D/3D geometry + centroid |
-| GET | `/api/v1/buildings/{id}/geojson` | GeoJSON footprint |
-| POST | `/api/v1/buildings/{id}/estimate-height` | Trigger ML height estimation |
-
-### Floors & Units
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/POST | `/api/v1/floors/` | List/Create floors |
-| GET/PUT | `/api/v1/floors/{id}` | Get/Update floor |
-| GET/POST | `/api/v1/units/` | List/Create units |
-| GET/PUT | `/api/v1/units/{id}` | Get/Update unit |
-
-### ULPIN
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/ulpin/generate` | Generate candidate ULPIN |
-| POST | `/api/v1/ulpin/validate` | Validate ULPIN format + status |
-| GET | `/api/v1/ulpin/{ulpin}` | Lookup ULPIN by string |
-
-### Validation Services
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/validation/geometry` | 2D/3D geometry validation |
-| POST | `/api/v1/validation/topology` | Topological relationship validation |
-| POST | `/api/v1/validation/cadastral` | Full cadastral entity integrity check |
-
-### Async Jobs
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/jobs` | Submit async job |
-| GET | `/api/v1/jobs` | List jobs (filtered) |
-| GET | `/api/v1/jobs/{id}` | Get job status + result |
-| POST | `/api/v1/jobs/{id}/cancel` | Cancel queued/processing job |
-
-### Health
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Liveness probe |
-| GET | `/ready` | Readiness probe |
-| GET | `/api/v1/health` | Full system health |
-
-Full interactive docs at: **`http://localhost:8000/docs`**
+The frontend reads `VITE_BACKEND_URL` (default `http://localhost:8000`) and
+`VITE_MAPBOX_TOKEN`. Environment files are **never** committed — start from
+`.env.example`.
 
 ---
 
-## RBAC Roles
+## 8. API surface
 
-| Role | Permissions |
-|------|-------------|
-| `admin` | Full access + user management |
-| `surveyor` | Create/edit parcels, buildings, floors, units; generate ULPIN; submit jobs |
-| `analyst` | Read all; validate; generate ULPIN; submit jobs |
-| `viewer` | Read-only |
+All routes live under `/api/v1` (14 routers). The ones that matter most:
 
----
+| Group | Endpoints |
+|---|---|
+| **Spatial** | `GET /spatial/extent` · `GET /spatial/bbox` · `GET /spatial/nearby` · `POST /spatial/query` · `GET /spatial/search` *(point lookup — powers the map click)* |
+| **Buildings** | `GET /buildings` · `GET /buildings/{id}` · `GET /buildings/{id}/structure` *(nested building → floors → units + 3D ULPINs)* · `GET /buildings/{id}/geometry` · `GET /buildings/{id}/geojson` |
+| **Floors / Units** | `GET /floors/{id}` · `GET /floors/{id}/units` · `GET /buildings/{id}/floors` · `GET /units/{id}` |
+| **3D ULPIN** | `POST /ulpin/3d/sync/{building_id}` · `GET /ulpin/3d/validate/{ulpin}` · `GET /ulpin/3d/{ulpin}` |
+| **Legacy ULPIN** | `POST /ulpin/generate` · `POST /ulpin/validate` · `GET /ulpin/{ulpin}` |
+| **Ingestion** | `POST /ingest/location` · `GET /ingest/coverage` |
+| **Ops** | `GET /health` · `POST /auth/login` · `GET /jobs` · `GET /datasets` |
 
-## Database Tables
-
-| Table | Description |
-|-------|-------------|
-| `users` | Auth + RBAC |
-| `parcels` | Land parcels with 2D boundary geometry (PostGIS) |
-| `buildings` | Buildings on parcels with footprint + height |
-| `floors` | Floors within buildings (elevation, area) |
-| `units` | Units within floors (type, occupancy) |
-| `ulpin_records` | ULPIN assignments + status lifecycle |
-| `async_jobs` | Job queue tracking + results |
-| `dataset_registry` | Ingested dataset metadata |
-| `provenance_records` | Data lineage |
-| `audit_logs` | Immutable change log |
-
-PostGIS GiST spatial indexes are created on `parcels.boundary` and `buildings.footprint_2d`.
+Full reference: [`BACKEND_INTEGRATION_GUIDE.md`](BACKEND_INTEGRATION_GUIDE.md).
 
 ---
 
-## Background Worker
+## 9. What is real, and what is derived
 
-The worker is a standalone async event loop process (no Celery dependency):
+Honesty is a feature of this project, so the current dev database is stated as measured:
+
+| Class | Count | Meaning |
+|---|---|---|
+| Real OpenStreetMap footprints (real `way/*` id **and** real source URL) | **44** parcels + **44** buildings | genuinely sourced geometry |
+| Legacy demo/seed records (`SAMPLE-A-*`, `TCET Block A/B`, `Residential Tower 1/2`) | **6** parcels + **6** buildings | **not real** — no OSM reference, hardcoded heights; queued for quarantine |
+| Buildings with a real height | **24** of 50 | the rest honestly render nothing and get no 3D ULPIN |
+| Floors with a real `z` range | **41** | derived from real `building:levels` tags |
+| Candidate **units** | **3,491** | **ML-derived analytical subdivision** (≈1 per 100 m²), *not* real dwellings; no unit geometry stored yet |
+| 3D ULPINs generated from real geometry | Taj: 1 parcel + 1 building + 6 floors | verified live |
+| Records with `official_ulpin` set | **0** | nothing fabricated as a government ULPIN |
+| Buildings claiming satellite/LiDAR/Bhuvan evidence | **0** | earlier fabricated-evidence path was removed |
+
+Guiding rules, enforced in code and tested:
+
+1. Never fabricate an official ULPIN.
+2. Never derive identity from a UUID, timestamp, counter, request id or ML run id.
+3. The ML `volume_id` is **provenance**, never an identifier.
+4. No invented vertical data — missing values stay `NULL`.
+5. Derived data is always tagged (`ml_derived`, `ScientificStatus`, confidence).
+6. Invalid input fails loudly instead of producing a plausible-looking value.
+
+---
+
+## 10. Testing
 
 ```bash
-python -m app.workers.worker
+# Backend — 212 passing
+python -m pytest -q
+
+# ML engine — 100 tests
+cd ml-engine && python -m pytest -q
+
+# Frontend — typecheck + production build
+cd frontend && npx tsc -b && npx vite build
 ```
 
-**Execution flow:**
-1. Listens on Redis list `strata:jobs:queue` via `blpop` (3s timeout)
-2. Falls back to DB polling for QUEUED jobs if Redis is unavailable
-3. Executes real job types: `batch_validation`, `cadastral_audit`, `ulpin_batch`
-4. Retries up to `max_retries` on failure; marks `FAILED` after exhaustion
+Highlights: canonicalization determinism (reversed vertices, rotated start vertex,
+MultiPolygon ordering), bucketing equivalence, checksum mutation sweeps, collision
+widening, ML-volume-id honesty, ingestion honesty, spatial endpoint contracts, and a
+source-level guard that the frontend can never mint a ULPIN.
 
 ---
 
-## Running Tests
+## 11. Known limitations
 
-```bash
-# All tests (25 unit + spatial + contract + integration)
-python -m pytest tests/ -v
-
-# By category
-python -m pytest tests/unit/           # Unit tests (no DB)
-python -m pytest tests/spatial/        # Geometry + topology service tests
-python -m pytest tests/contract/       # ML/ingestion contract validation
-python -m pytest tests/integration/    # API endpoint integration tests
-
-# With coverage
-python -m pytest --cov=app --cov-report=html
-```
+- **Units have no 3D geometry yet** (`units.geometry_3d` is `NULL`), so units honestly get
+  no 3D ULPIN and are not extruded. Unit selection works from the floor panel.
+- **26 of 50 buildings have no height** because OpenStreetMap carries neither `height` nor
+  `building:levels` for them. Wiring a real elevation/DSM source is the next step.
+- **No official ULPIN dataset is connected**, so `official_ulpin` is `NULL` everywhere and
+  cannot be joined or fabricated.
+- **6 legacy demo records** still sit in the dev database and are queued for quarantine.
+- Unit counts are a **candidate analytical subdivision**, not a count of real dwellings.
 
 ---
 
-## Environment Variables
+## 12. Docs
 
-Copy `.env.example` to `.env`. Key variables:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL async URL | required |
-| `REDIS_URL` | Redis URL | `redis://localhost:6379/0` |
-| `SECRET_KEY` | JWT signing key (≥32 chars) | required |
-| `ALLOWED_ORIGINS` | CORS origins (comma-separated) | `http://localhost:3000` |
-| `ML_ENGINE_ENABLED` | Enable ML Engine integration | `false` |
-| `ML_ENGINE_URL` | ML Engine base URL | `http://ml-engine:8001` |
-| `ENVIRONMENT` | `development` / `production` | `development` |
+| Document | Contents |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, data model (ER), all workflows, ULPIN pipeline, provenance rules, extension guide |
+| [`docs/ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md`](docs/ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md) | Validation report for the 3D ULPIN + interactive selection, incl. the collision analysis |
+| [`docs/ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md`](docs/ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md) | On-demand ingestion design and the Taj prototype walkthrough |
+| [`BACKEND_INTEGRATION_GUIDE.md`](BACKEND_INTEGRATION_GUIDE.md) | Full API reference |
+| [`ml-engine/MODEL_STATUS.md`](ml-engine/MODEL_STATUS.md) | Honest status of the trained ML components |
+| [`docs/LEGACY_README.md`](docs/LEGACY_README.md) | Archived earlier README drafts |
 
 ---
 
-## PostGIS Requirements
+## 13. Team
 
-- PostgreSQL 16+ with PostGIS 3.4+ extension
-- Enable extension: `CREATE EXTENSION IF NOT EXISTS postgis;`
-- Docker image used: `postgis/postgis:16-3.4`
+**Team Aeranoix** — Grand Finale Cohort
 
----
+Amaan Huda · Dhyana Kansara · Mohammed Rehan Khan · Vinayak Kesarkar · Arpan Maurya · Ankita Jha
 
-## ML Engine Integration
-
-The ML Engine is integrated as `ml-engine/` in this monorepo and runs as a separate FastAPI service.
-
-**ML Engine API (port 8001):**
-- `GET  /health` — liveness probe
-- `POST /process/parcel` — end-to-end ML inference (`MLEnginePipeline.process_parcel`)
-- `POST /predict/height` — height estimation
-- `POST /predict/floors` — floor count estimation
-- `POST /generate/vertical-units` — vertical unit segmentation
-
-**Activating the ML Engine:**
-```bash
-# In .env:
-ML_ENGINE_ENABLED=true
-ML_ENGINE_URL=http://ml-engine:8001   # Docker Compose internal name
-
-# Start all services including ml-engine:
-docker compose up -d
-
-# Or run ML Engine standalone (local dev):
-cd ml-engine
-uvicorn src.server:app --host 0.0.0.0 --port 8001 --reload
-```
-
-**ML Engine tests (no DB needed):**
-```bash
-cd ml-engine
-pytest tests/unit/ -v
-```
-
-**When `ML_ENGINE_ENABLED=false` (default):** the backend raises `MLEngineNotAvailableError` — 
-it never fabricates synthetic predictions.
-
-Contracts: `app/integrations/ml_engine/contracts.py`
-ML Output Schema: `ml-engine/schemas/ml_output_contract.json`
-
----
-
-## Limitations & Disclaimers
-
-1. **Candidate ULPINs** are computational outputs — not official government ULPINs.
-2. Official ULPIN assignment requires external authority validation (out of backend scope).
-3. Spatial area calculations in EPSG:4326 use degree-based approximations in Shapely. PostGIS geography functions are used for metric distance queries.
-4. Production deployments should configure proper SSL, WAF, and rate limiting.
-
----
-
-*STRATA Backend v2.0.0 — SIH 2026 PS26011*
-
-
----
-
-## Architecture
-
-```
-Frontend (React/Cesium)
-    │
-    ▼
-FastAPI Backend  ← This Repository
-    │
-    ├── PostgreSQL + PostGIS  (spatial data)
-    ├── Redis + Celery        (async jobs)
-    └── ML Engine Adapter ──→ 3D-Mapping-ml-engine (separate repo)
-```
-
-**Pattern**: Routes → Schemas → Services → Repositories → DB  
-with Services → ML Adapter for external ML calls.
-
----
-
-## Property Hierarchy
-
-```
-Parcel (land plot)
-  └── Building
-        └── Floor
-              └── Unit (apartment/shop/office)
-```
-
-Each entity can receive a **ULPIN** (Unique Land Parcel Identification Number).
-
-> ⚠️ AI-derived vertical unit ULPINs are analytical/candidate outputs only.
-> They do NOT constitute authoritative legal cadastral records until verified
-> by a competent authority.
-
----
-
-## Stack
-
-| Component | Technology |
-|-----------|------------|
-| API Framework | FastAPI 0.115 |
-| Database | PostgreSQL 16 + PostGIS 3.4 |
-| ORM | SQLAlchemy 2.0 (async) + GeoAlchemy2 |
-| Migrations | Alembic |
-| Auth | JWT (python-jose) + bcrypt |
-| Task Queue | Celery + Redis |
-| ML Integration | HTTPX async client with retry |
-| Testing | pytest-asyncio + HTTPX |
-| Containerization | Docker + Docker Compose |
-
----
-
-## Quick Start (Docker)
-
-```bash
-# 1. Clone and configure
-git clone <your-repo-url> 3D-Mapping-backend
-cd 3D-Mapping-backend
-cp .env.example .env
-# Edit .env: set SECRET_KEY, DATABASE_URL
-
-# 2. Start all services
-docker compose up -d
-
-# 3. Run migrations
-docker compose exec backend alembic upgrade head
-
-# 4. Create superadmin
-docker compose exec backend python scripts/create_superadmin.py
-
-# 5. API is live at http://localhost:8000
-# Swagger UI: http://localhost:8000/docs
-```
-
----
-
-## Quick Start (Local Dev)
-
-```bash
-# Prerequisites: Python 3.12+, PostgreSQL + PostGIS, Redis
-
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-
-pip install -r requirements.txt
-
-cp .env.example .env
-# Fill in DATABASE_URL, SECRET_KEY
-
-alembic upgrade head
-uvicorn app.main:app --reload --port 8000
-```
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /health | Health check |
-| POST | /api/v1/auth/register | Register user |
-| POST | /api/v1/auth/login | Login → JWT tokens |
-| POST | /api/v1/parcels | Create parcel |
-| GET | /api/v1/parcels | List parcels |
-| GET | /api/v1/parcels/{id} | Get parcel |
-| GET | /api/v1/parcels/spatial/bbox | Spatial bbox search |
-| GET | /api/v1/parcels/spatial/radius | Spatial radius search |
-| POST | /api/v1/buildings | Create building |
-| GET | /api/v1/buildings/{id} | Get building |
-| POST | /api/v1/buildings/{id}/ml/height | Trigger ML height estimation |
-| POST | /api/v1/buildings/{id}/ml/floors | Trigger ML floor count |
-| POST | /api/v1/floors | Create floor |
-| GET | /api/v1/floors/{id} | Get floor |
-| POST | /api/v1/units | Create unit |
-| GET | /api/v1/units/{id} | Get unit |
-| POST | /api/v1/ulpin/generate | Generate ULPIN |
-| GET | /api/v1/ulpin/lookup/{ulpin} | Lookup ULPIN |
-| POST | /api/v1/jobs | Submit async job |
-| GET | /api/v1/jobs/{id} | Get job status |
-
-Full interactive docs at `/docs`.
-
----
-
-## RBAC Roles
-
-| Role | Permissions |
-|------|-------------|
-| admin | Full access |
-| surveyor | Create/edit parcels, buildings, floors, units; generate ULPIN |
-| analyst | Read all data; trigger ML jobs |
-| viewer | Read-only |
-
----
-
-## Database Tables
-
-| Table | Description |
-|-------|-------------|
-| users | Auth + RBAC |
-| parcels | Land parcels with 2D/3D geometry |
-| buildings | Buildings on parcels |
-| floors | Floors within buildings |
-| units | Units within floors |
-| ulpin_records | ULPIN assignments |
-| async_jobs | Job queue tracking |
-| dataset_registry | Dataset metadata |
-| provenance_records | Data lineage |
-| audit_logs | Immutable change log |
-
----
-
-## ML Integration
-
-The backend connects to the **3D-Mapping-ml-engine** via HTTP adapter:
-
-```
-Backend ML Adapter → POST /v1/height/estimate
-                   → POST /v1/buildings/extract
-                   → POST /v1/floors/count
-```
-
-Configure `ML_ENGINE_BASE_URL` in `.env`.
-The contracts are defined in `app/integrations/ml_engine/contracts.py`.
-
-### Trained model status (2026-09-24)
-
-- **Building-footprint extraction**: a real torch U-Net (1.09M params) has been
-  trained from scratch on SVAMITVA drone tiles (Kaggle community mirror —
-  `KAGGLE_BENCHMARK` provenance; government-**origin** imagery, community
-  annotations, **not** Survey of India ground truth). Honest held-out metrics:
-  **IoU 0.241 / Dice 0.322** on a leakage-resistant spatial split.
-  Full audit: [`ml-engine/MODEL_STATUS.md`](./ml-engine/MODEL_STATUS.md),
-  [`ml-engine/DATASET_STATUS.md`](./ml-engine/DATASET_STATUS.md), and the
-  per-dataset usage map [`ml-engine/datasets/DATASET_CATALOG.md`](./ml-engine/datasets/DATASET_CATALOG.md).
-- **Height / floors / units / cadastral**: no open government-labelled data exists —
-  these remain **DATA_BLOCKED** and are served by the algorithmic baselines only.
-- No ML endpoint fabricates values when a model or engine is unavailable; failures
-  surface as errors, and every checkpoint must carry provenance metadata to load.
-- Persistence is verified against real **PostgreSQL 16.4 + PostGIS 3.6.2**
-  end-to-end (parcel → building → floor → geometry), not just mocked tests.
-
----
-
-## Running Tests
-
-```bash
-pytest tests/unit/           # Unit tests (no DB needed)
-pytest tests/contract/       # Contract/schema tests
-pytest tests/integration/    # Integration tests (needs running app)
-pytest --cov=app             # Full coverage
-```
-
----
-
-## Environment Variables
-
-See `.env.example` for all variables. Critical ones:
-
-- `DATABASE_URL` — PostgreSQL connection string
-- `SECRET_KEY` — JWT signing key (min 32 chars, random)
-- `ML_ENGINE_BASE_URL` — URL of the ML engine service
-
----
-
-## Limitations & Disclaimers
-
-1. Building-footprint extraction uses a **trained U-Net with KAGGLE_BENCHMARK
-   provenance** (community-annotated SVAMITVA mirror) — it is a benchmark
-   demonstration, not government-compliant ground truth.
-2. AI/ML-derived height, floor count, and unit segmentation are **analytical estimates**
-   only (no open labelled data exists to train them; see ml-engine/DATASET_STATUS.md).
-3. ULPIN generation uses a deterministic hash — **not the official government ULPIN format**.
-4. Authoritative cadastral records require official survey and legal publication.
-5. PostGIS spatial indexes must be created via Alembic migration for production performance.
-
----
-
-## Connecting to Frontend & ML Engine
-
-```
-3D-Mapping-ml-engine  ←─ HTTP ─→  3D-Mapping-backend  ←─ REST API ─→  Frontend
-```
-
-- ML Engine: set `ML_ENGINE_BASE_URL` to the running ml-engine address
-- Frontend: point all API calls to `http://<backend-host>:8000/api/v1/`
-- CORS: add frontend origin to `ALLOWED_ORIGINS` in `.env`
-
----
-
-## Backup & Recovery
-
-```bash
-# Backup
-pg_dump -U postgres ulpin_db > backup_$(date +%Y%m%d).sql
-
-# Restore
-psql -U postgres ulpin_db < backup_YYYYMMDD.sql
-```
+Built for the Ministry of Housing and Urban Affairs (MoHUA) problem statement
+**SIH 2026 PS26011 — 3D ULPIN Generation and Vertical Property Mapping System**.
