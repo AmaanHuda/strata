@@ -12,24 +12,8 @@ os.environ.setdefault("SECRET_KEY", "test_secret_key_at_least_32_chars_long_here
 
 from httpx import AsyncClient, ASGITransport
 from app.main import app
-from app.api.v1.deps import get_current_user
-from app.db.models.user import User, UserRole
 from app.db.models.job import AsyncJob
 from app.db.session import get_db
-
-
-def _make_mock_admin_user() -> User:
-    """Creates an in-memory mock admin User for dependency injection (no DB needed)."""
-    return User(
-        id=uuid.uuid4(),
-        email="testadmin@strata.test",
-        username="testadmin",
-        hashed_password="hashed_password",
-        full_name="Test Admin",
-        role=UserRole.ADMIN,
-        is_active=True,
-        is_verified=True,
-    )
 
 
 class MockQueryResult:
@@ -254,31 +238,19 @@ async def client():
 @pytest_asyncio.fixture
 async def client_with_auth():
     """
-    AsyncClient with FastAPI's get_current_user dependency overridden.
-    All endpoints requiring auth will use a mock ADMIN user (no real DB needed).
+    AsyncClient for the endpoint suites that used to need a signed-in user.
+
+    Sign-in was removed from STRATA, so endpoints no longer authenticate. This is
+    now a plain client, keeping the name so those suites stay untouched.
     """
-    mock_user = _make_mock_admin_user()
-
-    async def _mock_current_user():
-        return mock_user
-
-    app.dependency_overrides[get_current_user] = _mock_current_user
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
-    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest.fixture
 def auth_headers():
     """
-    Returns an Authorization header dict and overrides get_current_user dependency
-    for the duration of the test so endpoints requiring auth accept it without a real DB.
+    Was an Authorization header plus an auth dependency override. With sign-in
+    removed the endpoints read no header, so tests can keep passing this along.
     """
-    mock_user = _make_mock_admin_user()
-
-    async def _mock_current_user():
-        return mock_user
-
-    app.dependency_overrides[get_current_user] = _mock_current_user
-    yield {"Authorization": "Bearer test-integration-token"}
-    app.dependency_overrides.pop(get_current_user, None)
+    yield {}

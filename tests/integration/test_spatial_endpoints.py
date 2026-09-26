@@ -10,16 +10,6 @@ from httpx import AsyncClient
 # --- BBox Endpoint Tests ---
 
 @pytest.mark.asyncio
-async def test_spatial_bbox_requires_auth(client: AsyncClient):
-    """BBox endpoint must reject unauthenticated requests."""
-    resp = await client.get(
-        "/api/v1/spatial/bbox",
-        params={"min_lon": 77.0, "min_lat": 28.0, "max_lon": 78.0, "max_lat": 29.0},
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_spatial_bbox_valid_request(client_with_auth: AsyncClient):
     """BBox endpoint returns 200 with valid coordinates and auth."""
     resp = await client_with_auth.get(
@@ -65,16 +55,6 @@ async def test_spatial_bbox_layer_filter(client_with_auth: AsyncClient):
 # --- Nearby Endpoint Tests ---
 
 @pytest.mark.asyncio
-async def test_spatial_nearby_requires_auth(client: AsyncClient):
-    """Nearby endpoint must reject unauthenticated requests."""
-    resp = await client.get(
-        "/api/v1/spatial/nearby",
-        params={"lat": 28.6139, "lon": 77.2090, "radius_m": 500},
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_spatial_nearby_valid_request(client_with_auth: AsyncClient):
     """Nearby endpoint returns 200 with valid lat/lon/radius_m."""
     resp = await client_with_auth.get(
@@ -114,20 +94,6 @@ async def test_spatial_nearby_invalid_lat_lon(client_with_auth: AsyncClient):
 # --- Polygon Query Endpoint Tests ---
 
 @pytest.mark.asyncio
-async def test_spatial_query_requires_auth(client: AsyncClient):
-    """Polygon query must reject unauthenticated requests."""
-    resp = await client.post(
-        "/api/v1/spatial/query",
-        json={
-            "polygon_wkt": "POLYGON((77.0 28.0, 78.0 28.0, 78.0 29.0, 77.0 29.0, 77.0 28.0))",
-            "relation": "intersects",
-            "layer": "parcel",
-        },
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_spatial_query_valid_polygon_wkt(client_with_auth: AsyncClient):
     """Polygon query returns 200 with valid WKT polygon."""
     resp = await client_with_auth.post(
@@ -158,16 +124,6 @@ async def test_spatial_query_invalid_wkt(client_with_auth: AsyncClient):
 
 
 # --- Point-in-Polygon Lookup Endpoint Tests ---
-
-@pytest.mark.asyncio
-async def test_spatial_search_requires_auth(client: AsyncClient):
-    """Point lookup must reject unauthenticated requests."""
-    resp = await client.get(
-        "/api/v1/spatial/search",
-        params={"lat": 28.6139, "lon": 77.2090},
-    )
-    assert resp.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_spatial_search_valid_coords(client_with_auth: AsyncClient):

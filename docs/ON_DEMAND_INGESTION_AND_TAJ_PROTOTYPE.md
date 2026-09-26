@@ -281,18 +281,15 @@ tag**, so height is derived from `building:levels=6` and labelled `osm_levels_de
 ### (b) One command does fetch → ML → persist
 
 ```bash
-TOKEN=$(curl -s -X POST http://127.0.0.1:8123/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"demo","password":"Demo@12345"}' \
-  | python -c "import sys,json; print(json.load(sys.stdin)['data']['access_token'])")
-
 curl -s -X POST http://127.0.0.1:8123/api/v1/ingest/location \
-  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' \
   -d '{"lat":18.92170,"lon":72.83320,"radius_m":60,
        "name_contains":"Taj Mahal Palace","max_buildings":1,
        "state":"Maharashtra","district":"Mumbai","taluk":"Mumbai",
        "village":"Apollo Bandar","run_ml":true}'
 ```
+
+No token is needed — sign-in was removed from the backend (see §2 of the integration guide).
 
 Pass `"osm_id": 28846517` instead of `radius_m`/`name_contains` to ingest exactly one object via a
 single-way query — this skips the radius scan entirely and is the recommended re-run path (it is

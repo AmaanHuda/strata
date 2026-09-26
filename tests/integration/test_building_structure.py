@@ -14,13 +14,6 @@ NONEXISTENT_ID = str(uuid4())
 # --- Building Structure Endpoint ---
 
 @pytest.mark.asyncio
-async def test_building_structure_requires_auth(client: AsyncClient):
-    """Building structure endpoint must reject unauthenticated requests."""
-    resp = await client.get(f"/api/v1/buildings/{NONEXISTENT_ID}/structure")
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_building_structure_not_found(client_with_auth: AsyncClient):
     """Building structure endpoint returns 404 for non-existent building."""
     resp = await client_with_auth.get(f"/api/v1/buildings/{NONEXISTENT_ID}/structure")
@@ -56,13 +49,6 @@ async def test_building_structure_response_schema(client_with_auth: AsyncClient)
 # --- Building Geometry Endpoint ---
 
 @pytest.mark.asyncio
-async def test_building_geometry_requires_auth(client: AsyncClient):
-    """Building geometry endpoint must reject unauthenticated requests."""
-    resp = await client.get(f"/api/v1/buildings/{NONEXISTENT_ID}/geometry")
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_building_geometry_not_found(client_with_auth: AsyncClient):
     """Building geometry endpoint returns 404 for non-existent building."""
     resp = await client_with_auth.get(f"/api/v1/buildings/{NONEXISTENT_ID}/geometry")
@@ -94,13 +80,6 @@ async def test_building_geojson_not_found(client_with_auth: AsyncClient):
 
 
 # --- Buildings List Endpoint ---
-
-@pytest.mark.asyncio
-async def test_buildings_list_requires_auth(client: AsyncClient):
-    """Buildings list must require auth."""
-    resp = await client.get("/api/v1/buildings")
-    assert resp.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_buildings_list_with_auth(client_with_auth: AsyncClient):

@@ -300,9 +300,9 @@ No test was deleted.
    floor panel) was **not** completed under automation: the harness has no real
    drag/coordinate-click input, and Mapbox GL ignores synthetic wheel/pan gestures, so the
    camera could not be steered onto the Taj. The same code path was validated at the API
-   and unit-test level. To see it manually: open http://127.0.0.1:3000, sign in
-   (`demo`), draw a box over the Gateway of India, then click the Taj footprint and any
-   floor extrusion.
+   and unit-test level. To see it manually: open http://127.0.0.1:3000, draw a box over the
+   Gateway of India, then click the Taj footprint and any floor extrusion. (The app no
+   longer has a sign-in screen; this report was written while it still did.)
 5. **`GET /buildings/{id}/structure` performs the one-off materialisation write.** It is
    idempotent and cheap after the first call (0.27 s → 0.16 s), but a purist would move the
    initial generation into an explicit job rather than a read.

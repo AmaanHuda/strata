@@ -13,62 +13,7 @@ export const strataApi = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Attach Bearer token from localStorage on every request
-strataApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem("strata_access_token");
-  if (token) {
-    config.headers["Authorization"] = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// If the backend rejects our token, drop it and return to the sign-in gate.
-// Without this the UI keeps silently falling back to Mapbox-only data and the
-// user sees "No backend record found" with no explanation why.
-strataApi.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    const status = error?.response?.status;
-    const url: string = error?.config?.url || "";
-    const hadToken = !!localStorage.getItem("strata_access_token");
-    const isAuthCall = url.includes("/auth/login") || url.includes("/auth/refresh");
-    if (status === 401 && hadToken && !isAuthCall) {
-      console.warn("[STRATA] Session rejected by backend — signing out.");
-      localStorage.removeItem("strata_access_token");
-      localStorage.removeItem("strata_refresh_token");
-      window.location.reload();
-    }
-    return Promise.reject(error);
-  }
-);
-
-// --- Auth ---
-
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
-}
-
-export async function loginUser(
-  username: string,
-  password: string
-): Promise<TokenResponse> {
-  const res = await strataApi.post<{ success: boolean; data: TokenResponse }>(
-    "/auth/login",
-    { username, password }
-  );
-  return res.data.data;
-}
-
-export async function refreshToken(refresh_token: string): Promise<TokenResponse> {
-  const res = await strataApi.post<{ success: boolean; data: TokenResponse }>(
-    "/auth/refresh",
-    { refresh_token }
-  );
-  return res.data.data;
-}
+// No auth interceptor: STRATA has no sign-in, so requests are sent as-is.
 
 // --- Spatial ---
 

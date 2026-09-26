@@ -3,13 +3,13 @@
 
 > **Version:** 2.0.0 | **Base URL:** `http://localhost:8000`
 
-This guide is the authoritative reference for frontend developers and future ML Engine integration. It documents every API contract, authentication flow, spatial query payload, building hierarchy response, ULPIN lifecycle, validation services, and async job flow.
+This guide is the authoritative reference for frontend developers and future ML Engine integration. It documents every API contract, spatial query payload, building hierarchy response, ULPIN lifecycle, validation services, and async job flow. Sign-in has since been removed, so no endpoint requires a token.
 
 ---
 
 ## Table of Contents
 1. [Architecture Overview](#1-architecture-overview)
-2. [Authentication](#2-authentication)
+2. [Authentication (removed)](#2-authentication)
 3. [Spatial Query APIs](#3-spatial-query-apis)
 4. [Parcel APIs](#4-parcel-apis)
 5. [Building Hierarchy APIs](#5-building-hierarchy-apis)
@@ -45,83 +45,25 @@ This guide is the authoritative reference for frontend developers and future ML 
 
 ---
 
-## 2. Authentication
+## 2. Authentication — removed
 
-All endpoints except `/health`, `/ready`, and `/docs` require a Bearer JWT token.
+**STRATA has no sign-in.** Every endpoint under `/api/v1` is open; no request needs a
+header, token or cookie.
 
-### Register
-```http
-POST /api/v1/auth/register
-Content-Type: application/json
+The former `/api/v1/auth/*` surface — `POST /auth/register`, `POST /auth/login`,
+`POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` — was deleted together with
+JWT signing, password hashing, refresh-token rotation and the role checks, so those
+routes now return `404`. The `users` and `refresh_tokens` tables are still in the
+schema (Alembic history is untouched) but nothing reads or writes them.
 
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!",
-  "full_name": "John Doe",
-  "role": "viewer"   // viewer | analyst | surveyor | admin
-}
-```
+Identity is anonymous. `app/api/v1/deps.py` keeps the `get_current_user` and
+`require_roles` dependency names that every router declares, but they now return a
+fixed anonymous principal. Its `id` is `None`, so audit columns such as
+`async_jobs.created_by` and `ulpin_records.created_by` are stored empty rather than
+crediting a user who never signed in.
 
-**Response:** `201 Created`
-```json
-{
-  "success": true,
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "role": "viewer",
-    "is_active": true,
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-### Login
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "success": true,
-  "data": {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "token_type": "bearer",
-    "expires_in": 1800
-  }
-}
-```
-
-### Refresh Token
-```http
-POST /api/v1/auth/refresh
-Content-Type: application/json
-
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-### Using the Token
-```http
-Authorization: Bearer <access_token>
-```
-
-### Role Hierarchy
-| Role       | Permissions                                               |
-|------------|-----------------------------------------------------------|
-| `viewer`   | Read-only: parcels, buildings, floors, units, ULPIN lookup |
-| `analyst`  | viewer + validate, generate ULPINs, submit jobs           |
-| `surveyor` | analyst + create/update parcels, buildings, floors, units |
-| `admin`    | All permissions + user management, delete operations      |
+> If access control is ever needed again, put it in front of the API (reverse proxy,
+gateway, SSO) instead of re-introducing per-endpoint tokens.
 
 ---
 
@@ -132,7 +74,6 @@ Base: `/api/v1/spatial/`
 ### 3.1 Viewport Bounding Box Search
 ```http
 GET /api/v1/spatial/bbox?min_lon=77.0&min_lat=28.0&max_lon=77.5&max_lat=28.5&layer=all&limit=100
-Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
@@ -182,7 +123,6 @@ Authorization: Bearer <token>
 ### 3.2 Nearby Search (Metric Radius)
 ```http
 GET /api/v1/spatial/nearby?lat=28.6139&lon=77.2090&radius_m=500&limit=20
-Authorization: Bearer <token>
 ```
 
 > ⚠️ **Note:** Distance is calculated using PostGIS `ST_DWithin` on geography (spheroid), giving true metric distances, **not** Euclidean degree-based approximations.
@@ -211,7 +151,6 @@ Authorization: Bearer <token>
 ### 3.3 Polygon Intersection Query
 ```http
 POST /api/v1/spatial/query
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -227,7 +166,6 @@ Content-Type: application/json
 ### 3.4 Point-in-Polygon Lookup
 ```http
 GET /api/v1/spatial/search?lat=28.6139&lon=77.2090
-Authorization: Bearer <token>
 ```
 
 **Response:** `200 OK` (or `404` if no parcel at coordinates)
@@ -265,19 +203,16 @@ Base: `/api/v1/parcels/`
 ### List Parcels
 ```http
 GET /api/v1/parcels/?page=1&page_size=20&district=Delhi
-Authorization: Bearer <token>
 ```
 
 ### Get Parcel
 ```http
 GET /api/v1/parcels/{parcel_id}
-Authorization: Bearer <token>
 ```
 
 ### Create Parcel (surveyor/admin)
 ```http
 POST /api/v1/parcels/
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -302,7 +237,6 @@ Returns the entire building hierarchy in a single optimized query.
 
 ```http
 GET /api/v1/buildings/{building_id}/structure
-Authorization: Bearer <token>
 ```
 
 **Response:**
@@ -349,7 +283,6 @@ Authorization: Bearer <token>
 ### 5.2 Building Geometry
 ```http
 GET /api/v1/buildings/{building_id}/geometry
-Authorization: Bearer <token>
 ```
 
 **Response:**
@@ -375,7 +308,6 @@ Authorization: Bearer <token>
 ### 5.3 Building GeoJSON
 ```http
 GET /api/v1/buildings/{building_id}/geojson
-Authorization: Bearer <token>
 ```
 
 ---
@@ -393,7 +325,6 @@ CANDIDATE → VALIDATED → OFFICIAL
 ### 6.1 Generate Candidate ULPIN (analyst/surveyor/admin)
 ```http
 POST /api/v1/ulpin/generate
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -427,7 +358,6 @@ Content-Type: application/json
 ### 6.2 Validate ULPIN
 ```http
 POST /api/v1/ulpin/validate
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -459,7 +389,6 @@ Content-Type: application/json
 ### 6.3 Lookup ULPIN
 ```http
 GET /api/v1/ulpin/{ulpin_string}
-Authorization: Bearer <token>
 ```
 
 ---
@@ -471,7 +400,6 @@ Base: `/api/v1/validation/`
 ### 7.1 Geometry Validation
 ```http
 POST /api/v1/validation/geometry
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -528,7 +456,6 @@ Content-Type: application/json
 ### 7.2 Topology Validation
 ```http
 POST /api/v1/validation/topology
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -567,7 +494,6 @@ Content-Type: application/json
 ### 7.3 Cadastral Validation (Entity Integrity Check)
 ```http
 POST /api/v1/validation/cadastral
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -595,7 +521,6 @@ Base: `/api/v1/jobs/`
 ### 8.1 Submit Job
 ```http
 POST /api/v1/jobs
-Authorization: Bearer <token>
 Content-Type: application/json
 
 {
@@ -629,13 +554,11 @@ Content-Type: application/json
 ### 8.2 List Jobs
 ```http
 GET /api/v1/jobs?status=QUEUED&job_type=batch_validation&page=1&page_size=20
-Authorization: Bearer <token>
 ```
 
 ### 8.3 Get Job Status
 ```http
 GET /api/v1/jobs/{job_id}
-Authorization: Bearer <token>
 ```
 
 **Job Status Flow:**
@@ -648,7 +571,6 @@ QUEUED → PROCESSING → VALIDATING → COMPLETED
 ### 8.4 Cancel Job
 ```http
 POST /api/v1/jobs/{job_id}/cancel
-Authorization: Bearer <token>
 ```
 - Only `QUEUED` and `PROCESSING` jobs can be cancelled.
 - Users can only cancel their own jobs (admins can cancel any).
@@ -712,8 +634,6 @@ All API responses follow a consistent envelope:
 | Code | HTTP Status | Description |
 |------|-------------|-------------|
 | `VALIDATION_ERROR` | 422 | Request validation failed |
-| `AUTHENTICATION_ERROR` | 401 | Invalid or missing token |
-| `AUTHORIZATION_ERROR` | 403 | Insufficient permissions |
 | `NOT_FOUND` | 404 | Resource does not exist |
 | `CONFLICT` | 409 | Resource state conflict |
 | `INVALID_GEOMETRY` | 422 | Geometry parsing or validity error |
@@ -757,7 +677,6 @@ class HeightEstimationResponse:
 **Endpoint for future ML trigger:**
 ```http
 POST /api/v1/buildings/{building_id}/estimate-height?lat=28.6139&lon=77.2090
-Authorization: Bearer <admin_token>
 ```
 
 ---
@@ -776,10 +695,8 @@ POSTGRES_DB=strata_db
 # Redis (required for worker queue)
 REDIS_URL=redis://localhost:6379/0
 
-# JWT Security (change in production!)
-SECRET_KEY=change-me-in-production-use-32-chars-minimum
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=7
+# Sign-in was removed, so SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES,
+# REFRESH_TOKEN_EXPIRE_DAYS and BCRYPT_ROUNDS are read by no code path.
 
 # CORS (set to your frontend origin in production)
 ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173

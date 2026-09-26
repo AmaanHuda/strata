@@ -13,16 +13,6 @@ NONEXISTENT_ID = str(uuid4())
 # --- Submit Job ---
 
 @pytest.mark.asyncio
-async def test_submit_job_requires_auth(client: AsyncClient):
-    """Job submission must reject unauthenticated requests."""
-    resp = await client.post(
-        "/api/v1/jobs",
-        json={"job_type": "batch_validation"},
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_submit_batch_validation_job(client: AsyncClient, auth_headers: dict):
     """Submit batch_validation job returns 202 Accepted with job metadata."""
     resp = await client.post(
@@ -99,13 +89,6 @@ async def test_submit_job_invalid_type(client: AsyncClient, auth_headers: dict):
 
 
 # --- List Jobs ---
-
-@pytest.mark.asyncio
-async def test_list_jobs_requires_auth(client: AsyncClient):
-    """Jobs list must reject unauthenticated requests."""
-    resp = await client.get("/api/v1/jobs")
-    assert resp.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_list_jobs_with_auth(client: AsyncClient, auth_headers: dict):

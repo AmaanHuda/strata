@@ -49,7 +49,7 @@ flowchart LR
     end
 
     subgraph Service["2 · Backend API — FastAPI"]
-        API["REST /api/v1<br/>JWT auth + RBAC"]
+        API["REST /api/v1<br/>open, no sign-in"]
         DOM["Domain services<br/>ulpin_3d · geometry_canonical<br/>on_demand_ingest · cadastral_codes"]
     end
 
@@ -173,7 +173,6 @@ floor F05  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F05-U00000000-3CRY   z 16
 | **Frontend** | React 19, TypeScript 5.7, Vite 6, Zustand 5, Emotion, Axios, lucide-react |
 | **3D / mapping** | Mapbox GL JS 3.30, react-map-gl 8, Three.js 0.186, @react-three/fiber 9, @react-three/drei 10 |
 | **Backend** | Python 3.12+, FastAPI 0.115, SQLAlchemy 2.0 async, asyncpg, Pydantic 2.9, Alembic 1.13, httpx, structlog |
-| **Auth** | JWT (python-jose) + bcrypt (passlib), role-based access control |
 | **Async jobs** | Celery 5.4 + Redis 5 |
 | **Geospatial** | PostgreSQL + **PostGIS 3.4**, Shapely 2.0, pyproj 3.6, GeoAlchemy2 |
 | **ML engine** | Python + PyTorch (building-extraction checkpoint), NumPy, FastAPI, JSON contract v1.0.0 |
@@ -187,7 +186,7 @@ floor F05  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F05-U00000000-3CRY   z 16
 ```
 3D-MAPPING/
 ├── app/                        # Backend API — FastAPI + SQLAlchemy + PostGIS
-│   ├── api/v1/                 #   14 routers mounted under /api/v1
+│   ├── api/v1/                 #   13 routers mounted under /api/v1
 │   ├── services/               #   ulpin_3d · geometry_canonical · on_demand_ingest · cadastral_codes
 │   ├── integrations/ml_engine/ #   client · contracts · adapter · mapper (the ML boundary)
 │   ├── db/models/              #   property.py (Parcel/Building/Floor/Unit) · ulpin.py (registry)
@@ -205,7 +204,7 @@ floor F05  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F05-U00000000-3CRY   z 16
 │       └── state/areaStore.ts       # Zustand selection state
 ├── alembic/versions/           # DB migrations (head: 004_ulpin_3d_columns)
 ├── tests/                      # Backend test suite (212 passing)
-├── docs/                       # ARCHITECTURE.md · validation reports · legacy notes
+├── docs/                       # ARCHITECTURE.md · API reference · validation reports · legacy notes
 ├── docker-compose.yml          # db · redis · backend · worker · ml-engine · frontend
 └── README.md
 ```
@@ -219,7 +218,7 @@ floor F05  3DULPIN-01-IN-MH-30-PMSYEHQLFKFRS-BBB2XPWZ5-F05-U00000000-3CRY   z 16
 ```bash
 git clone https://github.com/Rehan-roid/3D-MAPPING.git
 cd 3D-MAPPING
-cp .env.example .env          # then fill in SECRET_KEY, DATABASE_URL, VITE_MAPBOX_TOKEN
+cp .env.example .env          # then fill in DATABASE_URL, VITE_MAPBOX_TOKEN
 docker compose up -d          # db · redis · ml-engine · backend · worker · frontend
 docker compose exec backend alembic upgrade head
 ```
@@ -252,7 +251,7 @@ The frontend reads `VITE_BACKEND_URL` (default `http://localhost:8000`) and
 
 ## 8. API surface
 
-All routes live under `/api/v1` (14 routers). The ones that matter most:
+All routes live under `/api/v1` (13 routers) and are unauthenticated. The ones that matter most:
 
 | Group | Endpoints |
 |---|---|
@@ -262,9 +261,9 @@ All routes live under `/api/v1` (14 routers). The ones that matter most:
 | **3D ULPIN** | `POST /ulpin/3d/sync/{building_id}` · `GET /ulpin/3d/validate/{ulpin}` · `GET /ulpin/3d/{ulpin}` |
 | **Legacy ULPIN** | `POST /ulpin/generate` · `POST /ulpin/validate` · `GET /ulpin/{ulpin}` |
 | **Ingestion** | `POST /ingest/location` · `GET /ingest/coverage` |
-| **Ops** | `GET /health` · `POST /auth/login` · `GET /jobs` · `GET /datasets` |
+| **Ops** | `GET /health` · `GET /jobs` · `GET /datasets` |
 
-Full reference: [`BACKEND_INTEGRATION_GUIDE.md`](BACKEND_INTEGRATION_GUIDE.md).
+Full reference: [`docs/BACKEND_INTEGRATION_GUIDE.md`](docs/BACKEND_INTEGRATION_GUIDE.md).
 
 ---
 
@@ -334,7 +333,8 @@ source-level guard that the frontend can never mint a ULPIN.
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture, data model (ER), all workflows, ULPIN pipeline, provenance rules, extension guide |
 | [`docs/ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md`](docs/ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md) | Validation report for the 3D ULPIN + interactive selection, incl. the collision analysis |
 | [`docs/ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md`](docs/ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md) | On-demand ingestion design and the Taj prototype walkthrough |
-| [`BACKEND_INTEGRATION_GUIDE.md`](BACKEND_INTEGRATION_GUIDE.md) | Full API reference |
+| [`docs/BACKEND_INTEGRATION_GUIDE.md`](docs/BACKEND_INTEGRATION_GUIDE.md) | Full API reference — every endpoint, auth, error envelope, env vars |
+| [`docs/FINAL_ML_COMPLETION_REPORT.md`](docs/FINAL_ML_COMPLETION_REPORT.md) | Point-in-time ML + backend completion report and its verification matrix |
 | [`ml-engine/MODEL_STATUS.md`](ml-engine/MODEL_STATUS.md) | Honest status of the trained ML components |
 | [`docs/LEGACY_README.md`](docs/LEGACY_README.md) | Archived earlier README drafts |
 

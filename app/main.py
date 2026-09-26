@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.v1 import (
-    auth,
     buildings,
     datasets,
     floors,
@@ -166,7 +165,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # API Routers
 api_v1 = "/api/v1"
 app.include_router(health.router)
-app.include_router(auth.router, prefix=api_v1)
 app.include_router(parcels.router, prefix=api_v1)
 app.include_router(buildings.router, prefix=api_v1)
 app.include_router(floors.router, prefix=api_v1)

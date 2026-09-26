@@ -11,16 +11,6 @@ from uuid import uuid4
 # --- Geometry Validation ---
 
 @pytest.mark.asyncio
-async def test_geometry_validation_requires_auth(client: AsyncClient):
-    """Geometry validation must reject unauthenticated requests."""
-    resp = await client.post(
-        "/api/v1/validation/geometry",
-        json={"geometry_wkt": "POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"},
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_geometry_validation_valid_polygon(client_with_auth: AsyncClient):
     """Geometry validation accepts a valid 2D WKT polygon."""
     resp = await client_with_auth.post(
@@ -122,19 +112,6 @@ async def test_geometry_validation_invalid_3d_heights(client_with_auth: AsyncCli
 # --- Topology Validation ---
 
 @pytest.mark.asyncio
-async def test_topology_validation_requires_auth(client: AsyncClient):
-    """Topology validation must reject unauthenticated requests."""
-    resp = await client.post(
-        "/api/v1/validation/topology",
-        json={
-            "parcel_wkt": "POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))",
-            "building_wkt": "POLYGON((2 2, 8 2, 8 8, 2 8, 2 2))",
-        },
-    )
-    assert resp.status_code == 401
-
-
-@pytest.mark.asyncio
 async def test_topology_validation_building_inside_parcel(client_with_auth: AsyncClient):
     """Topology validation passes when building is fully inside parcel."""
     resp = await client_with_auth.post(
@@ -181,16 +158,6 @@ async def test_topology_validation_missing_parcel(client_with_auth: AsyncClient)
 
 
 # --- Cadastral Validation ---
-
-@pytest.mark.asyncio
-async def test_cadastral_validation_requires_auth(client: AsyncClient):
-    """Cadastral validation must reject unauthenticated requests."""
-    resp = await client.post(
-        "/api/v1/validation/cadastral",
-        json={"parcel_id": str(uuid4())},
-    )
-    assert resp.status_code == 401
-
 
 @pytest.mark.asyncio
 async def test_cadastral_validation_not_found(client_with_auth: AsyncClient):

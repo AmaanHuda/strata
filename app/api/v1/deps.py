@@ -1,54 +1,58 @@
-"""FastAPI dependency providers: Authentication, RBAC, DB session."""
-from typing import Callable, List
+"""
+FastAPI dependency providers.
+
+Sign-in was intentionally **removed** from STRATA: there is no login, no token
+and no role check. Every `/api/v1/*` endpoint is open.
+
+This module survives as a thin compatibility layer. The routers all declare
+`Depends(get_current_user)` / `Depends(require_roles(...))` and pass the result
+around as an audit identity, so instead of rewriting twelve routers we keep the
+two dependency names and give them a no-auth implementation.
+
+What the caller gets back is an *anonymous principal*:
+  * `role` is always `UserRole.ADMIN`, so role comparisons inside routers pass.
+  * `id` is `None`. Audit columns fed from it (`async_jobs.created_by`,
+    `ulpin_records.created_by`, `dataset_registry.created_by`) are nullable, so
+    records are stored with no author — which is the honest answer when nobody
+    signed in.
+"""
+from dataclasses import dataclass
+from typing import Callable, Optional
 from uuid import UUID
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.errors import AuthenticationError, AuthorizationError
-from app.core.security import decode_token
-from app.db.models.user import User, UserRole
-from app.db.session import get_db
-
-bearer_scheme = HTTPBearer(auto_error=False)
+from app.db.models.user import UserRole
 
 
-async def get_current_user(
-    auth: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Extracts and validates user from JWT bearer token."""
-    if not auth:
-        raise AuthenticationError("Authorization header missing")
+@dataclass(frozen=True)
+class Principal:
+    """Identity of an unauthenticated caller. Never persisted, never trusted."""
 
-    token = auth.credentials
-    try:
-        payload = decode_token(token)
-    except Exception:
-        raise AuthenticationError("Invalid or expired access token")
-
-    if payload.get("type") != "access":
-        raise AuthenticationError("Token is not an access token")
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise AuthenticationError("Invalid token subject")
-
-    user = await db.get(User, UUID(user_id))
-    if not user:
-        raise AuthenticationError("User not found")
-    if not user.is_active:
-        raise AuthenticationError("User account is inactive")
-
-    return user
+    id: Optional[UUID] = None
+    role: UserRole = UserRole.ADMIN
+    email: str = "anonymous@strata.local"
+    username: str = "anonymous"
+    is_active: bool = True
 
 
-def require_roles(*roles: UserRole) -> Callable:
-    """RBAC dependency to ensure current user holds required role."""
-    async def _role_checker(user: User = Depends(get_current_user)) -> User:
-        if user.role not in roles:
-            raise AuthorizationError(
-                f"Role '{user.role.value}' does not have sufficient permissions. Required: {[r.value for r in roles]}"
-            )
-        return user
-    return _role_checker
+_ANONYMOUS = Principal()
+
+
+async def get_current_user() -> Principal:
+    """Returns the anonymous principal. No header, no token, no database lookup."""
+    return _ANONYMOUS
+
+
+def require_roles(*_roles: UserRole) -> Callable:
+    """
+    Signature-compatible stand-in for the old RBAC guard.
+
+    With no accounts there is nobody to grant or deny a role to, so this always
+    yields the anonymous principal. The role arguments are accepted and ignored
+    purely so existing `Depends(require_roles(UserRole.ADMIN, ...))` declarations
+    keep working.
+    """
+
+    async def _anonymous_caller() -> Principal:
+        return _ANONYMOUS
+
+    return _anonymous_caller

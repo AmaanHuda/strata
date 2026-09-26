@@ -56,7 +56,7 @@ geometry.
 | Service | Path | Role | Runtime |
 |---|---|---|---|
 | **Frontend** | `frontend/` | Map selection, 3D city view, building isolation, floor/unit selection and information panels | React 19 + Vite 6, served by Nginx in Docker |
-| **Backend API** | `app/` | REST API, auth/RBAC, spatial queries, cadastral persistence, ULPIN registry, on-demand ingestion orchestrator | FastAPI + SQLAlchemy async, uvicorn |
+| **Backend API** | `app/` | REST API (open — no sign-in), spatial queries, cadastral persistence, ULPIN registry, on-demand ingestion orchestrator | FastAPI + SQLAlchemy async, uvicorn |
 | **ML engine** | `ml-engine/` | Building extraction, height/floor inference, vertical unit delineation, confidence + evidence fusion, ML Output Contract v1.0.0 | FastAPI, separate process, independent deploy |
 
 They communicate **only** over HTTP with explicit Pydantic contracts, so any one
@@ -69,7 +69,7 @@ flowchart LR
     end
 
     subgraph Service["2 · Backend API — FastAPI"]
-        API["REST /api/v1<br/>JWT auth + RBAC"]
+        API["REST /api/v1<br/>open, no sign-in"]
         DOM["Domain services<br/>ulpin_3d · geometry_canonical<br/>on_demand_ingest · cadastral_codes"]
     end
 
@@ -413,7 +413,6 @@ carries this vocabulary into the database.
 | Frontend | React 19, TypeScript 5.7, Vite 6, Zustand 5, Emotion, Axios, lucide-react |
 | 3D / mapping | Mapbox GL JS 3.30, react-map-gl 8, Three.js 0.186, @react-three/fiber 9, @react-three/drei 10 |
 | Backend | Python 3.12+, FastAPI 0.115, SQLAlchemy 2.0 async, asyncpg, Pydantic 2.9, Alembic 1.13, httpx, structlog |
-| Auth | python-jose JWT, passlib + bcrypt, role-based access control |
 | Async jobs | Celery 5.4 + Redis 5 |
 | Geospatial | PostgreSQL + PostGIS 3.4, Shapely 2.0, pyproj 3.6, GeoAlchemy2 |
 | ML engine | Python, PyTorch checkpoint for building extraction, NumPy, FastAPI, Pydantic JSON contract v1.0.0 |
@@ -484,4 +483,5 @@ verification, and record the source in `ProvenanceRecord`.
 | [`ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md`](./ON_DEMAND_INGESTION_AND_TAJ_PROTOTYPE.md) | On-demand ingestion design + Taj prototype walkthrough |
 | [`ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md`](./ULPIN_3D_AND_INTERACTIVE_SELECTION_REPORT.md) | Validation report for the 3D ULPIN and interactive selection work, including the collision analysis |
 | [`LEGACY_README.md`](./LEGACY_README.md) | Archived earlier README drafts |
-| [`../BACKEND_INTEGRATION_GUIDE.md`](../BACKEND_INTEGRATION_GUIDE.md) | Full API reference |
+| [`BACKEND_INTEGRATION_GUIDE.md`](./BACKEND_INTEGRATION_GUIDE.md) | Full API reference — every endpoint, error envelope, env vars |
+| [`FINAL_ML_COMPLETION_REPORT.md`](./FINAL_ML_COMPLETION_REPORT.md) | Point-in-time ML + backend completion report and verification matrix |
