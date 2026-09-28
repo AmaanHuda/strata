@@ -58,17 +58,36 @@ app = FastAPI(
 
 # Secure CORS Middleware
 cors_allowed = settings.origins_list
-if not cors_allowed or cors_allowed == ["*"]:
-    cors_allowed = ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"]
+if not cors_allowed:
+    cors_allowed = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://strataaa.netlify.app",
+    ]
+elif "https://strataaa.netlify.app" not in cors_allowed and "*" not in cors_allowed:
+    cors_allowed.append("https://strataaa.netlify.app")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_allowed,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-Process-Time"],
-)
+if "*" in cors_allowed:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID", "X-Process-Time"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_allowed,
+        allow_origin_regex=r"^https:\/\/([a-zA-Z0-9_-]+\.)*netlify\.app$",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["*"],
+        expose_headers=["X-Request-ID", "X-Process-Time"],
+    )
 
 
 # Request ID & Timing Middleware

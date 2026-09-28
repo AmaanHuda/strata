@@ -106,18 +106,18 @@ Set `ML_ENGINE_ENABLED=true` and start the ml-engine service to activate real in
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| API Framework | FastAPI 0.115+ (async) |
-| Database | PostgreSQL 16 + PostGIS 3.4 |
-| ORM | SQLAlchemy 2.0 (async) + GeoAlchemy2 |
-| Migrations | Alembic |
-| Auth | JWT (python-jose) + bcrypt |
-| Task Queue | Redis (async `blpop` consumer, no Celery) |
-| Geometry | Shapely + GeoAlchemy2 + PostGIS |
-| ML Integration | HTTPX async client (decoupled, activate via env) |
-| Testing | pytest-asyncio + HTTPX AsyncClient |
-| Containerization | Docker + Docker Compose |
+| Component        | Technology                                       |
+| ---------------- | ------------------------------------------------ |
+| API Framework    | FastAPI 0.115+ (async)                           |
+| Database         | PostgreSQL 16 + PostGIS 3.4                      |
+| ORM              | SQLAlchemy 2.0 (async) + GeoAlchemy2             |
+| Migrations       | Alembic                                          |
+| Auth             | JWT (python-jose) + bcrypt                       |
+| Task Queue       | Redis (async `blpop` consumer, no Celery)        |
+| Geometry         | Shapely + GeoAlchemy2 + PostGIS                  |
+| ML Integration   | HTTPX async client (decoupled, activate via env) |
+| Testing          | pytest-asyncio + HTTPX AsyncClient               |
+| Containerization | Docker + Docker Compose                          |
 
 ---
 
@@ -169,77 +169,86 @@ python -m app.workers.worker
 ## API Endpoints (v2.0.0)
 
 ### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/auth/register` | Register user |
-| POST | `/api/v1/auth/login` | Login → JWT tokens |
-| POST | `/api/v1/auth/refresh` | Refresh access token |
-| GET | `/api/v1/auth/me` | Current user profile |
+
+| Method | Path                    | Description          |
+| ------ | ----------------------- | -------------------- |
+| POST   | `/api/v1/auth/register` | Register user        |
+| POST   | `/api/v1/auth/login`    | Login → JWT tokens   |
+| POST   | `/api/v1/auth/refresh`  | Refresh access token |
+| GET    | `/api/v1/auth/me`       | Current user profile |
 
 ### Spatial Queries
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/spatial/bbox` | Viewport bounding box search |
-| GET | `/api/v1/spatial/nearby` | Radius search (metric, PostGIS geography) |
-| POST | `/api/v1/spatial/query` | Polygon intersection/contains/within query |
-| GET | `/api/v1/spatial/search` | Point-in-polygon lookup |
+
+| Method | Path                     | Description                                |
+| ------ | ------------------------ | ------------------------------------------ |
+| GET    | `/api/v1/spatial/bbox`   | Viewport bounding box search               |
+| GET    | `/api/v1/spatial/nearby` | Radius search (metric, PostGIS geography)  |
+| POST   | `/api/v1/spatial/query`  | Polygon intersection/contains/within query |
+| GET    | `/api/v1/spatial/search` | Point-in-polygon lookup                    |
 
 ### Parcels
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/parcels/` | List parcels (paginated) |
-| POST | `/api/v1/parcels/` | Create parcel |
-| GET | `/api/v1/parcels/{id}` | Get parcel |
-| PUT | `/api/v1/parcels/{id}` | Update parcel |
-| DELETE | `/api/v1/parcels/{id}` | Delete parcel |
+
+| Method | Path                   | Description              |
+| ------ | ---------------------- | ------------------------ |
+| GET    | `/api/v1/parcels/`     | List parcels (paginated) |
+| POST   | `/api/v1/parcels/`     | Create parcel            |
+| GET    | `/api/v1/parcels/{id}` | Get parcel               |
+| PUT    | `/api/v1/parcels/{id}` | Update parcel            |
+| DELETE | `/api/v1/parcels/{id}` | Delete parcel            |
 
 ### Buildings
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/buildings/` | List buildings |
-| POST | `/api/v1/buildings/` | Create building |
-| GET | `/api/v1/buildings/{id}` | Get building |
-| GET | `/api/v1/buildings/{id}/structure` | Full hierarchy (building→floors→units) |
-| GET | `/api/v1/buildings/{id}/geometry` | 2D/3D geometry + centroid |
-| GET | `/api/v1/buildings/{id}/geojson` | GeoJSON footprint |
-| POST | `/api/v1/buildings/{id}/estimate-height` | Trigger ML height estimation |
+
+| Method | Path                                     | Description                            |
+| ------ | ---------------------------------------- | -------------------------------------- |
+| GET    | `/api/v1/buildings/`                     | List buildings                         |
+| POST   | `/api/v1/buildings/`                     | Create building                        |
+| GET    | `/api/v1/buildings/{id}`                 | Get building                           |
+| GET    | `/api/v1/buildings/{id}/structure`       | Full hierarchy (building→floors→units) |
+| GET    | `/api/v1/buildings/{id}/geometry`        | 2D/3D geometry + centroid              |
+| GET    | `/api/v1/buildings/{id}/geojson`         | GeoJSON footprint                      |
+| POST   | `/api/v1/buildings/{id}/estimate-height` | Trigger ML height estimation           |
 
 ### Floors & Units
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/POST | `/api/v1/floors/` | List/Create floors |
-| GET/PUT | `/api/v1/floors/{id}` | Get/Update floor |
-| GET/POST | `/api/v1/units/` | List/Create units |
-| GET/PUT | `/api/v1/units/{id}` | Get/Update unit |
+
+| Method   | Path                  | Description        |
+| -------- | --------------------- | ------------------ |
+| GET/POST | `/api/v1/floors/`     | List/Create floors |
+| GET/PUT  | `/api/v1/floors/{id}` | Get/Update floor   |
+| GET/POST | `/api/v1/units/`      | List/Create units  |
+| GET/PUT  | `/api/v1/units/{id}`  | Get/Update unit    |
 
 ### ULPIN
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/ulpin/generate` | Generate candidate ULPIN |
-| POST | `/api/v1/ulpin/validate` | Validate ULPIN format + status |
-| GET | `/api/v1/ulpin/{ulpin}` | Lookup ULPIN by string |
+
+| Method | Path                     | Description                    |
+| ------ | ------------------------ | ------------------------------ |
+| POST   | `/api/v1/ulpin/generate` | Generate candidate ULPIN       |
+| POST   | `/api/v1/ulpin/validate` | Validate ULPIN format + status |
+| GET    | `/api/v1/ulpin/{ulpin}`  | Lookup ULPIN by string         |
 
 ### Validation Services
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/validation/geometry` | 2D/3D geometry validation |
-| POST | `/api/v1/validation/topology` | Topological relationship validation |
-| POST | `/api/v1/validation/cadastral` | Full cadastral entity integrity check |
+
+| Method | Path                           | Description                           |
+| ------ | ------------------------------ | ------------------------------------- |
+| POST   | `/api/v1/validation/geometry`  | 2D/3D geometry validation             |
+| POST   | `/api/v1/validation/topology`  | Topological relationship validation   |
+| POST   | `/api/v1/validation/cadastral` | Full cadastral entity integrity check |
 
 ### Async Jobs
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/jobs` | Submit async job |
-| GET | `/api/v1/jobs` | List jobs (filtered) |
-| GET | `/api/v1/jobs/{id}` | Get job status + result |
-| POST | `/api/v1/jobs/{id}/cancel` | Cancel queued/processing job |
+
+| Method | Path                       | Description                  |
+| ------ | -------------------------- | ---------------------------- |
+| POST   | `/api/v1/jobs`             | Submit async job             |
+| GET    | `/api/v1/jobs`             | List jobs (filtered)         |
+| GET    | `/api/v1/jobs/{id}`        | Get job status + result      |
+| POST   | `/api/v1/jobs/{id}/cancel` | Cancel queued/processing job |
 
 ### Health
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Liveness probe |
-| GET | `/ready` | Readiness probe |
-| GET | `/api/v1/health` | Full system health |
+
+| Method | Path             | Description        |
+| ------ | ---------------- | ------------------ |
+| GET    | `/health`        | Liveness probe     |
+| GET    | `/ready`         | Readiness probe    |
+| GET    | `/api/v1/health` | Full system health |
 
 Full interactive docs at: **`http://localhost:8000/docs`**
 
@@ -247,29 +256,29 @@ Full interactive docs at: **`http://localhost:8000/docs`**
 
 ## RBAC Roles
 
-| Role | Permissions |
-|------|-------------|
-| `admin` | Full access + user management |
+| Role       | Permissions                                                                |
+| ---------- | -------------------------------------------------------------------------- |
+| `admin`    | Full access + user management                                              |
 | `surveyor` | Create/edit parcels, buildings, floors, units; generate ULPIN; submit jobs |
-| `analyst` | Read all; validate; generate ULPIN; submit jobs |
-| `viewer` | Read-only |
+| `analyst`  | Read all; validate; generate ULPIN; submit jobs                            |
+| `viewer`   | Read-only                                                                  |
 
 ---
 
 ## Database Tables
 
-| Table | Description |
-|-------|-------------|
-| `users` | Auth + RBAC |
-| `parcels` | Land parcels with 2D boundary geometry (PostGIS) |
-| `buildings` | Buildings on parcels with footprint + height |
-| `floors` | Floors within buildings (elevation, area) |
-| `units` | Units within floors (type, occupancy) |
-| `ulpin_records` | ULPIN assignments + status lifecycle |
-| `async_jobs` | Job queue tracking + results |
-| `dataset_registry` | Ingested dataset metadata |
-| `provenance_records` | Data lineage |
-| `audit_logs` | Immutable change log |
+| Table                | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `users`              | Auth + RBAC                                      |
+| `parcels`            | Land parcels with 2D boundary geometry (PostGIS) |
+| `buildings`          | Buildings on parcels with footprint + height     |
+| `floors`             | Floors within buildings (elevation, area)        |
+| `units`              | Units within floors (type, occupancy)            |
+| `ulpin_records`      | ULPIN assignments + status lifecycle             |
+| `async_jobs`         | Job queue tracking + results                     |
+| `dataset_registry`   | Ingested dataset metadata                        |
+| `provenance_records` | Data lineage                                     |
+| `audit_logs`         | Immutable change log                             |
 
 PostGIS GiST spatial indexes are created on `parcels.boundary` and `buildings.footprint_2d`.
 
@@ -284,6 +293,7 @@ python -m app.workers.worker
 ```
 
 **Execution flow:**
+
 1. Listens on Redis list `strata:jobs:queue` via `blpop` (3s timeout)
 2. Falls back to DB polling for QUEUED jobs if Redis is unavailable
 3. Executes real job types: `batch_validation`, `cadastral_audit`, `ulpin_batch`
@@ -313,15 +323,15 @@ python -m pytest --cov=app --cov-report=html
 
 Copy `.env.example` to `.env`. Key variables:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL async URL | required |
-| `REDIS_URL` | Redis URL | `redis://localhost:6379/0` |
-| `SECRET_KEY` | JWT signing key (≥32 chars) | required |
-| `ALLOWED_ORIGINS` | CORS origins (comma-separated) | `http://localhost:3000` |
-| `ML_ENGINE_ENABLED` | Enable ML Engine integration | `false` |
-| `ML_ENGINE_URL` | ML Engine base URL | `http://ml-engine:8001` |
-| `ENVIRONMENT` | `development` / `production` | `development` |
+| Variable            | Description                    | Default                    |
+| ------------------- | ------------------------------ | -------------------------- |
+| `DATABASE_URL`      | PostgreSQL async URL           | required                   |
+| `REDIS_URL`         | Redis URL                      | `redis://localhost:6379/0` |
+| `SECRET_KEY`        | JWT signing key (≥32 chars)    | required                   |
+| `ALLOWED_ORIGINS`   | CORS origins (comma-separated) | `http://localhost:3000`    |
+| `ML_ENGINE_ENABLED` | Enable ML Engine integration   | `false`                    |
+| `ML_ENGINE_URL`     | ML Engine base URL             | `http://ml-engine:8001`    |
+| `ENVIRONMENT`       | `development` / `production`   | `development`              |
 
 ---
 
@@ -338,6 +348,7 @@ Copy `.env.example` to `.env`. Key variables:
 The ML Engine is integrated as `ml-engine/` in this monorepo and runs as a separate FastAPI service.
 
 **ML Engine API (port 8001):**
+
 - `GET  /health` — liveness probe
 - `POST /process/parcel` — end-to-end ML inference (`MLEnginePipeline.process_parcel`)
 - `POST /predict/height` — height estimation
@@ -345,6 +356,7 @@ The ML Engine is integrated as `ml-engine/` in this monorepo and runs as a separ
 - `POST /generate/vertical-units` — vertical unit segmentation
 
 **Activating the ML Engine:**
+
 ```bash
 # In .env:
 ML_ENGINE_ENABLED=true
@@ -359,12 +371,13 @@ uvicorn src.server:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 **ML Engine tests (no DB needed):**
+
 ```bash
 cd ml-engine
 pytest tests/unit/ -v
 ```
 
-**When `ML_ENGINE_ENABLED=false` (default):** the backend raises `MLEngineNotAvailableError` — 
+**When `ML_ENGINE_ENABLED=false` (default):** the backend raises `MLEngineNotAvailableError` —
 it never fabricates synthetic predictions.
 
 Contracts: `app/integrations/ml_engine/contracts.py`
@@ -381,8 +394,7 @@ ML Output Schema: `ml-engine/schemas/ml_output_contract.json`
 
 ---
 
-*STRATA Backend v2.0.0 — SIH 2026 PS26011*
-
+_STRATA Backend v2.0.0 — SIH 2026 PS26011_
 
 ---
 
@@ -423,17 +435,17 @@ Each entity can receive a **ULPIN** (Unique Land Parcel Identification Number).
 
 ## Stack
 
-| Component | Technology |
-|-----------|------------|
-| API Framework | FastAPI 0.115 |
-| Database | PostgreSQL 16 + PostGIS 3.4 |
-| ORM | SQLAlchemy 2.0 (async) + GeoAlchemy2 |
-| Migrations | Alembic |
-| Auth | JWT (python-jose) + bcrypt |
-| Task Queue | Celery + Redis |
-| ML Integration | HTTPX async client with retry |
-| Testing | pytest-asyncio + HTTPX |
-| Containerization | Docker + Docker Compose |
+| Component        | Technology                           |
+| ---------------- | ------------------------------------ |
+| API Framework    | FastAPI 0.115                        |
+| Database         | PostgreSQL 16 + PostGIS 3.4          |
+| ORM              | SQLAlchemy 2.0 (async) + GeoAlchemy2 |
+| Migrations       | Alembic                              |
+| Auth             | JWT (python-jose) + bcrypt           |
+| Task Queue       | Celery + Redis                       |
+| ML Integration   | HTTPX async client with retry        |
+| Testing          | pytest-asyncio + HTTPX               |
+| Containerization | Docker + Docker Compose              |
 
 ---
 
@@ -482,28 +494,28 @@ uvicorn app.main:app --reload --port 8000
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /health | Health check |
-| POST | /api/v1/auth/register | Register user |
-| POST | /api/v1/auth/login | Login → JWT tokens |
-| POST | /api/v1/parcels | Create parcel |
-| GET | /api/v1/parcels | List parcels |
-| GET | /api/v1/parcels/{id} | Get parcel |
-| GET | /api/v1/parcels/spatial/bbox | Spatial bbox search |
-| GET | /api/v1/parcels/spatial/radius | Spatial radius search |
-| POST | /api/v1/buildings | Create building |
-| GET | /api/v1/buildings/{id} | Get building |
-| POST | /api/v1/buildings/{id}/ml/height | Trigger ML height estimation |
-| POST | /api/v1/buildings/{id}/ml/floors | Trigger ML floor count |
-| POST | /api/v1/floors | Create floor |
-| GET | /api/v1/floors/{id} | Get floor |
-| POST | /api/v1/units | Create unit |
-| GET | /api/v1/units/{id} | Get unit |
-| POST | /api/v1/ulpin/generate | Generate ULPIN |
-| GET | /api/v1/ulpin/lookup/{ulpin} | Lookup ULPIN |
-| POST | /api/v1/jobs | Submit async job |
-| GET | /api/v1/jobs/{id} | Get job status |
+| Method | Path                             | Description                  |
+| ------ | -------------------------------- | ---------------------------- |
+| GET    | /health                          | Health check                 |
+| POST   | /api/v1/auth/register            | Register user                |
+| POST   | /api/v1/auth/login               | Login → JWT tokens           |
+| POST   | /api/v1/parcels                  | Create parcel                |
+| GET    | /api/v1/parcels                  | List parcels                 |
+| GET    | /api/v1/parcels/{id}             | Get parcel                   |
+| GET    | /api/v1/parcels/spatial/bbox     | Spatial bbox search          |
+| GET    | /api/v1/parcels/spatial/radius   | Spatial radius search        |
+| POST   | /api/v1/buildings                | Create building              |
+| GET    | /api/v1/buildings/{id}           | Get building                 |
+| POST   | /api/v1/buildings/{id}/ml/height | Trigger ML height estimation |
+| POST   | /api/v1/buildings/{id}/ml/floors | Trigger ML floor count       |
+| POST   | /api/v1/floors                   | Create floor                 |
+| GET    | /api/v1/floors/{id}              | Get floor                    |
+| POST   | /api/v1/units                    | Create unit                  |
+| GET    | /api/v1/units/{id}               | Get unit                     |
+| POST   | /api/v1/ulpin/generate           | Generate ULPIN               |
+| GET    | /api/v1/ulpin/lookup/{ulpin}     | Lookup ULPIN                 |
+| POST   | /api/v1/jobs                     | Submit async job             |
+| GET    | /api/v1/jobs/{id}                | Get job status               |
 
 Full interactive docs at `/docs`.
 
@@ -511,29 +523,29 @@ Full interactive docs at `/docs`.
 
 ## RBAC Roles
 
-| Role | Permissions |
-|------|-------------|
-| admin | Full access |
+| Role     | Permissions                                                   |
+| -------- | ------------------------------------------------------------- |
+| admin    | Full access                                                   |
 | surveyor | Create/edit parcels, buildings, floors, units; generate ULPIN |
-| analyst | Read all data; trigger ML jobs |
-| viewer | Read-only |
+| analyst  | Read all data; trigger ML jobs                                |
+| viewer   | Read-only                                                     |
 
 ---
 
 ## Database Tables
 
-| Table | Description |
-|-------|-------------|
-| users | Auth + RBAC |
-| parcels | Land parcels with 2D/3D geometry |
-| buildings | Buildings on parcels |
-| floors | Floors within buildings |
-| units | Units within floors |
-| ulpin_records | ULPIN assignments |
-| async_jobs | Job queue tracking |
-| dataset_registry | Dataset metadata |
-| provenance_records | Data lineage |
-| audit_logs | Immutable change log |
+| Table              | Description                      |
+| ------------------ | -------------------------------- |
+| users              | Auth + RBAC                      |
+| parcels            | Land parcels with 2D/3D geometry |
+| buildings          | Buildings on parcels             |
+| floors             | Floors within buildings          |
+| units              | Units within floors              |
+| ulpin_records      | ULPIN assignments                |
+| async_jobs         | Job queue tracking               |
+| dataset_registry   | Dataset metadata                 |
+| provenance_records | Data lineage                     |
+| audit_logs         | Immutable change log             |
 
 ---
 

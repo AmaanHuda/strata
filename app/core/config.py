@@ -11,6 +11,7 @@ Canonical variable names (one name per setting):
 """
 from functools import lru_cache
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,6 +34,26 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/ulpin_db"
     SYNC_DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/ulpin_db"
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_async_db_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("SYNC_DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_sync_db_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql://", 1)
+            elif v.startswith("postgresql+asyncpg://"):
+                v = v.replace("postgresql+asyncpg://", "postgresql://", 1)
+        return v
+
     # JWT & Security
     # Canonical JWT secret. MUST be overridden via SECRET_KEY env var in production.
     SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"
@@ -44,7 +65,9 @@ class Settings(BaseSettings):
     LOCKOUT_MINUTES: int = 15
 
     # CORS — canonical: CORS_ORIGINS
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://strataaa.netlify.app"
+    )
 
     # External ML Engine Contract — canonical: ML_ENGINE_URL, ML_ENGINE_TIMEOUT
     ML_ENGINE_URL: str = "http://localhost:8001"

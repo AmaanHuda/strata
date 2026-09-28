@@ -5,7 +5,8 @@
  */
 import axios from "axios";
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || "https://strata-asz6.onrender.com";
 
 export const strataApi = axios.create({
   baseURL: `${BACKEND_URL}/api/v1`,
@@ -52,7 +53,7 @@ export interface PointLookupResponse {
 export async function pointLookup(
   lat: number,
   lon: number,
-  radiusM = 400
+  radiusM = 400,
 ): Promise<PointLookupResponse | null> {
   try {
     const res = await strataApi.get<{
@@ -64,7 +65,7 @@ export async function pointLookup(
   } catch (err) {
     console.error(
       `[STRATA] pointLookup failed for lat=${lat}, lon=${lon} (backend ${BACKEND_URL}). Returning no record.`,
-      err
+      err,
     );
     return null;
   }
@@ -96,12 +97,15 @@ export async function getDataExtent(): Promise<DataExtent | null> {
   try {
     const res = await strataApi.get<{ success: boolean; data: DataExtent }>(
       "/spatial/extent",
-      { params: { layer: "all" } }
+      { params: { layer: "all" } },
     );
     if (res.data.success) return res.data.data;
     return null;
   } catch (err) {
-    console.error(`[STRATA] getDataExtent failed (backend ${BACKEND_URL}).`, err);
+    console.error(
+      `[STRATA] getDataExtent failed (backend ${BACKEND_URL}).`,
+      err,
+    );
     return null;
   }
 }
@@ -113,19 +117,28 @@ export async function queryBBox(
   maxLon: number,
   maxLat: number,
   layer: "building" | "parcel" | "all" = "building",
-  limit = 100
+  limit = 100,
 ): Promise<SpatialEntityItem[]> {
   try {
     const res = await strataApi.get<{ success: boolean; data: BBoxResponse }>(
       "/spatial/bbox",
-      { params: { min_lon: minLon, min_lat: minLat, max_lon: maxLon, max_lat: maxLat, layer, limit } }
+      {
+        params: {
+          min_lon: minLon,
+          min_lat: minLat,
+          max_lon: maxLon,
+          max_lat: maxLat,
+          layer,
+          limit,
+        },
+      },
     );
     if (res.data.success) return res.data.data.results;
     return [];
   } catch (err) {
     console.error(
       `[STRATA] queryBBox failed for layer=${layer} (backend ${BACKEND_URL}). Returning empty layer.`,
-      err
+      err,
     );
     return [];
   }
@@ -133,7 +146,10 @@ export async function queryBBox(
 
 // --- Buildings ---
 
-export interface CentroidPoint { lat: number; lon: number; }
+export interface CentroidPoint {
+  lat: number;
+  lon: number;
+}
 
 export interface UnitStructure {
   id: string;
@@ -215,7 +231,7 @@ export interface BuildingStructure {
 
 /** Fetch complete building hierarchy: floors, units, ULPIN, ML provenance. */
 export async function getBuildingStructure(
-  buildingId: string
+  buildingId: string,
 ): Promise<BuildingStructure | null> {
   try {
     const res = await strataApi.get<{
@@ -227,7 +243,7 @@ export async function getBuildingStructure(
   } catch (err) {
     console.error(
       `[STRATA] getBuildingStructure failed for building ${buildingId} (backend ${BACKEND_URL}).`,
-      err
+      err,
     );
     return null;
   }
@@ -339,7 +355,10 @@ export async function ingestLocation(params: {
   runMl?: boolean;
 }): Promise<IngestLocationResult | null> {
   try {
-    const res = await strataApi.post<{ success: boolean; data: IngestLocationResult }>(
+    const res = await strataApi.post<{
+      success: boolean;
+      data: IngestLocationResult;
+    }>(
       "/ingest/location",
       {
         lat: params.lat,
@@ -351,25 +370,29 @@ export async function ingestLocation(params: {
         max_buildings: params.maxBuildings ?? 10,
         run_ml: params.runMl ?? true,
       },
-      { timeout: 180000 } // Overpass + ML inference is slower than a plain read
+      { timeout: 180000 }, // Overpass + ML inference is slower than a plain read
     );
     if (res.data.success) return res.data.data;
     return null;
   } catch (err) {
     console.error(
       `[STRATA] ingestLocation failed for lat=${params.lat}, lon=${params.lon} (backend ${BACKEND_URL}).`,
-      err
+      err,
     );
     return null;
   }
 }
 
 /** Persisted row counts, so coverage is observable rather than assumed. */
-export async function getIngestCoverage(): Promise<Record<string, number> | null> {
+export async function getIngestCoverage(): Promise<Record<
+  string,
+  number
+> | null> {
   try {
-    const res = await strataApi.get<{ success: boolean; data: Record<string, number> }>(
-      "/ingest/coverage"
-    );
+    const res = await strataApi.get<{
+      success: boolean;
+      data: Record<string, number>;
+    }>("/ingest/coverage");
     if (res.data.success) return res.data.data;
     return null;
   } catch (err) {
@@ -380,7 +403,7 @@ export async function getIngestCoverage(): Promise<Record<string, number> | null
 
 /** Fetch real GeoJSON geometry for 3D rendering. */
 export async function getBuildingGeometry(
-  buildingId: string
+  buildingId: string,
 ): Promise<BuildingGeometry | null> {
   try {
     const res = await strataApi.get<{
@@ -392,7 +415,7 @@ export async function getBuildingGeometry(
   } catch (err) {
     console.error(
       `[STRATA] getBuildingGeometry failed for building ${buildingId} (backend ${BACKEND_URL}). Falling back to Mapbox geometry.`,
-      err
+      err,
     );
     return null;
   }
