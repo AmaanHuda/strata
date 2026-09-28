@@ -5,8 +5,7 @@
  */
 import axios from "axios";
 
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || "https://strata-asz6.onrender.com";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 export const strataApi = axios.create({
   baseURL: `${BACKEND_URL}/api/v1`,
