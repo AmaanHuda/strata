@@ -1,0 +1,76 @@
+services:
+  # 1. Redis
+  - type: redis
+    name: strata-redis
+    ipAllowList: []
+    plan: free
+
+  # 2. ML Engine (Private Service)
+  - type: pserv
+    name: strata-ml-engine
+    env: docker
+    dockerfilePath: ./ml-engine/Dockerfile
+    dockerContext: ./ml-engine
+    plan: starter
+    envVars:
+      - key: ML_ENGINE_LOG_LEVEL
+        value: INFO
+
+  # 3. Backend (Web Service)
+  - type: web
+    name: strata-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: strata-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: strata-redis
+          property: connectionString
+      - key: ML_ENGINE_URL
+        value: http://strata-ml-engine:8001
+      - key: ML_ENGINE_ENABLED
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+
+  # 4. Celery Worker
+  - type: worker
+    name: strata-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    dockerCommand: python -m app.workers.worker
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: strata-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: strata-redis
+          property: connectionString
+      - key: ML_ENGINE_URL
+        value: http://strata-ml-engine:8001
+      - key: ML_ENGINE_ENABLED
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+
+databases:
+  - name: strata-db
+    databaseName: ulpin_db
+    user: postgres
+    plan: starter
