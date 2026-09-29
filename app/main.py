@@ -64,11 +64,21 @@ if not cors_allowed:
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
-        "https://strataaa.netlify.app",
+        "https://strataaa.netlify.app", 
     ]
 elif "https://strataaa.netlify.app" not in cors_allowed and "*" not in cors_allowed:
     cors_allowed.append("https://strataaa.netlify.app")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://strataaa.netlify.app",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 if "*" in cors_allowed:
     app.add_middleware(
         CORSMiddleware,
