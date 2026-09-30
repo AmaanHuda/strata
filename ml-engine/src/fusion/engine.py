@@ -2,7 +2,8 @@
 Multi-source Evidence Fusion & Conflict Detection Engine.
 SIH 2026 PS 26011 - ML Engine
 """
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
+
 
 
 # Evidence fusion state constants
