@@ -2,6 +2,8 @@
 Confidence & Uncertainty Quantification Calibrator.
 SIH 2026 PS 26011 - ML Engine
 """
+from typing import Optional
+
 from src.confidence.calibration_metrics import (
     calculate_brier_score,
     calculate_expected_calibration_error,
