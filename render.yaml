@@ -25,12 +25,49 @@ services:
           name: strata-redis
           property: connectionString
       - key: ML_ENGINE_ENABLED
-        value: "false"
+        value: "true"
+      - key: ML_ENGINE_URL
+        value: "http://strata-ml-engine:8001"
       - key: SECRET_KEY
         generateValue: true
 
+  # 3. Worker (Free Background Worker)
+  - type: worker
+    name: strata-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: "python -m app.workers.worker"
+    plan: free
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: strata-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: strata-redis
+          property: connectionString
+      - key: ML_ENGINE_ENABLED
+        value: "true"
+      - key: ML_ENGINE_URL
+        value: "http://strata-ml-engine:8001"
+      - key: SECRET_KEY
+        generateValue: true
+
+  # 4. ML Engine (Free Web Service)
+  - type: web
+    name: strata-ml-engine
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./ml-engine
+    plan: free
+
 databases:
-  # 3. PostgreSQL Database (Free Tier - expires in 90 days on Render)
+  # 5. PostgreSQL Database (Free Tier)
   - name: strata-db
     databaseName: ulpin_db
     user: postgres
